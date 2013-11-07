@@ -33,7 +33,7 @@ page.  It is not a recursive crawler.
 #
 # pylint: disable-msg=C0111
 #
-# Copyright 2010--2012 Christian Kreibich. All rights reserved.
+# Copyright 2010--2013 Christian Kreibich. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
