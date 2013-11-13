@@ -65,6 +65,7 @@ import re
 import urllib
 import urllib2
 from BeautifulSoup import BeautifulSoup
+from cookielib import CookieJar
 
 class Article():
     """
@@ -296,15 +297,21 @@ class ScholarQuerier():
         if self.count != 0:
             self.scholar_url += '&num=%d' % self.count
 
+        self.cj = CookieJar()
+        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(self.cj))        
+
     def query(self, search):
         """
         This method initiates a query with subsequent parsing of the
         response.
         """
+
+		# clears old results
+        self.clear_articles()
         url = self.scholar_url % {'query': urllib.quote(search.encode('utf-8')), 'author': urllib.quote(self.author)}
         req = urllib2.Request(url=url,
                               headers={'User-Agent': self.UA})
-        hdl = urllib2.urlopen(req)
+        hdl = self.opener.open(req)
         html = hdl.read()
         self.parse(html)
 
@@ -317,6 +324,10 @@ class ScholarQuerier():
 
     def add_article(self, art):
         self.articles.append(art)
+    
+	# clears results
+    def clear_articles(self):
+        self.articles = []
 
 
 
