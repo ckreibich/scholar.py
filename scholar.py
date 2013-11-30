@@ -9,6 +9,8 @@ page.  It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 1.6:  Cookie support, from Matej Smid (https://github.com/palmstrom).
+#
 # 1.5:  A few changes:
 #
 #       - Tweak suggested by Tobias Isenberg: use unicode during CSV
@@ -297,16 +299,14 @@ class ScholarQuerier():
         if self.count != 0:
             self.scholar_url += '&num=%d' % self.count
 
-        self.cj = CookieJar()
-        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(self.cj))        
+        self.cjar = CookieJar()
+        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(self.cjar))
 
     def query(self, search):
         """
         This method initiates a query with subsequent parsing of the
         response.
         """
-
-		# clears old results
         self.clear_articles()
         url = self.scholar_url % {'query': urllib.quote(search.encode('utf-8')), 'author': urllib.quote(self.author)}
         req = urllib2.Request(url=url,
@@ -325,8 +325,8 @@ class ScholarQuerier():
     def add_article(self, art):
         self.articles.append(art)
     
-	# clears results
     def clear_articles(self):
+        """Clears any existing articles stored from previous queries."""
         self.articles = []
 
 
