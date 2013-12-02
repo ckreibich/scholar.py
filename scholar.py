@@ -83,6 +83,13 @@ except ImportError:
     # Fallback on old BeautifulSoup
     from BeautifulSoup import BeautifulSoup
 
+# On Python 3, unicode is str
+if sys.version_info[0] == 3:
+    unicode = str
+    encode = lambda s: s
+else:
+    encode = lambda s: s.encode('utf-8')
+
 class Article():
     """
     A class representing articles listed on Google Scholar.  The class
@@ -128,7 +135,7 @@ class Article():
         res = []
         if header:
             res.append(sep.join(keys))
-        res.append(sep.join([str(self.attrs[key][0]) for key in keys]))
+        res.append(sep.join([unicode(self.attrs[key][0]) for key in keys]))
         return '\n'.join(res)
 
 class ScholarParser():
@@ -322,7 +329,7 @@ class ScholarQuerier():
         response.
         """
         self.clear_articles()
-        url = self.scholar_url % {'query': quote(search.encode('utf-8')), 'author': quote(self.author)}
+        url = self.scholar_url % {'query': quote(encode(search)), 'author': quote(self.author)}
         req = Request(url=url, headers={'User-Agent': self.UA})
         hdl = self.opener.open(req)
         html = hdl.read()
@@ -361,7 +368,7 @@ def csv(query, author, count, header=False, sep='|'):
         articles = articles[:count]
     for art in articles:
         result = art.as_csv(header=header, sep=sep)
-        print(result.encode('utf-8'))
+        print(encode(result))
         header = False
 
 def url(title, author):
