@@ -390,7 +390,7 @@ A command-line interface to Google Scholar."""
     options, args = parser.parse_args()
 
     if len(args) == 0:
-        print 'Hrrrm. I  need a query string.'
+        parser.print_help()
         sys.exit(1)
 
     query = ' '.join(args)
