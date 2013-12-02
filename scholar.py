@@ -64,10 +64,24 @@ page.  It is not a recursive crawler.
 import optparse
 import sys
 import re
-import urllib
-import urllib2
-from BeautifulSoup import BeautifulSoup
-from cookielib import CookieJar
+
+try:
+    # Try importing urllib objects for Python 3
+    from urllib.request import HTTPCookieProcessor, Request, build_opener
+    from urllib.parse import quote
+    from http.cookiejar import CookieJar
+except ImportError:
+    # Fallback for Python 2
+    from urllib2 import Request, build_opener, HTTPCookieProcessor
+    from urllib import quote
+    from cookielib import CookieJar
+
+try:
+    # Try import Beautiful Soup version 4
+    from bs4 import BeautifulSoup
+except ImportError:
+    # Fallback on old BeautifulSoup
+    from BeautifulSoup import BeautifulSoup
 
 class Article():
     """
@@ -100,7 +114,7 @@ class Article():
 
     def as_txt(self):
         # Get items sorted in specified order:
-        items = sorted(self.attrs.values(), key=lambda item: item[2])
+        items = sorted(list(self.attrs.values()), key=lambda item: item[2])
         # Find largest label length:
         max_label_len = max([len(str(item[1])) for item in items])
         fmt = '%%%ds %%s' % max_label_len
@@ -109,12 +123,12 @@ class Article():
     def as_csv(self, header=False, sep='|'):
         # Get keys sorted in specified order:
         keys = [pair[0] for pair in \
-                    sorted([(key, val[2]) for key, val in self.attrs.items()],
+                    sorted([(key, val[2]) for key, val in list(self.attrs.items())],
                            key=lambda pair: pair[1])]
         res = []
         if header:
             res.append(sep.join(keys))
-        res.append(sep.join([unicode(self.attrs[key][0]) for key in keys]))
+        res.append(sep.join([str(self.attrs[key][0]) for key in keys]))
         return '\n'.join(res)
 
 class ScholarParser():
@@ -300,7 +314,7 @@ class ScholarQuerier():
             self.scholar_url += '&num=%d' % self.count
 
         self.cjar = CookieJar()
-        self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(self.cjar))
+        self.opener = build_opener(HTTPCookieProcessor(self.cjar))
 
     def query(self, search):
         """
@@ -308,9 +322,8 @@ class ScholarQuerier():
         response.
         """
         self.clear_articles()
-        url = self.scholar_url % {'query': urllib.quote(search.encode('utf-8')), 'author': urllib.quote(self.author)}
-        req = urllib2.Request(url=url,
-                              headers={'User-Agent': self.UA})
+        url = self.scholar_url % {'query': quote(search.encode('utf-8')), 'author': quote(self.author)}
+        req = Request(url=url, headers={'User-Agent': self.UA})
         hdl = self.opener.open(req)
         html = hdl.read()
         self.parse(html)
@@ -338,7 +351,7 @@ def txt(query, author, count):
     if count > 0:
         articles = articles[:count]
     for art in articles:
-        print art.as_txt() + '\n'
+        print(art.as_txt() + '\n')
 
 def csv(query, author, count, header=False, sep='|'):
     querier = ScholarQuerier(author=author, count=count)
@@ -348,7 +361,7 @@ def csv(query, author, count, header=False, sep='|'):
         articles = articles[:count]
     for art in articles:
         result = art.as_csv(header=header, sep=sep)
-        print result.encode('utf-8')
+        print(result.encode('utf-8'))
         header = False
 
 def url(title, author):
