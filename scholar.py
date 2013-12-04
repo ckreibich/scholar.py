@@ -65,6 +65,7 @@ import optparse
 import sys
 import re
 
+# Import urllib classes and methods
 try:
     # Try importing urllib objects for Python 3
     from urllib.request import HTTPCookieProcessor, Request, build_opener
@@ -76,15 +77,30 @@ except ImportError:
     from urllib import quote
     from cookielib import CookieJar
 
-from bs4 import BeautifulSoup
+# Import BeautifulSoup
+try:
+    # Try importing BeautifulSoup 4
+    from bs4 import BeautifulSoup
 
+    # In BS4 class attribute is a list of classes
+    def has_class(tag, class_name):
+        return tag.get('class') == [class_name]
+except ImportError:
+    # Fallback for old BeautifulSoup versions
+    from BeautifulSoup import BeautifulSoup
 
-# On Python 3, unicode is str
+    # In BeautifulSoup class attribute is a string
+    def has_class(tag, class_name):
+        return tag.get('class') == class_name
+
+# Support unicode in both Python 2 and 3
 if sys.version_info[0] == 3:
+    # On Python 3, unicode is str
     unicode = str
     encode = lambda s: s
 else:
     encode = lambda s: s.encode('utf-8')
+
 
 class Article():
     """
@@ -168,7 +184,7 @@ class ScholarParser():
             if not hasattr(tag, 'name'):
                 continue
 
-            if tag.name == 'div' and tag.get('class') == ['gs_rt'] and \
+            if tag.name == 'div' and has_class(tag, 'gs_rt') and \
                     tag.h3 and tag.h3.a:
                 self.article['title'] = ''.join(tag.h3.a.findAll(text=True))
                 self.article['url'] = self._path2url(tag.h3.a['href'])
@@ -177,7 +193,7 @@ class ScholarParser():
                 for tag2 in tag:
                     if not hasattr(tag2, 'name'):
                         continue
-                    if tag2.name == 'span' and tag2.get('class') == ['gs_fl']:
+                    if tag2.name == 'span' and has_class(tag2, 'gs_fl'):
                         self._parse_links(tag2)
 
         if self.article['title']:
@@ -204,7 +220,7 @@ class ScholarParser():
 
     @staticmethod
     def _tag_checker(tag):
-        return tag.name == 'div' and tag.get('class') == ['gs_r']
+        return tag.name == 'div' and has_class(tag, 'gs_r')
 
     def _as_int(self, obj):
         try:
@@ -232,15 +248,15 @@ class ScholarParser120201(ScholarParser):
             if not hasattr(tag, 'name'):
                 continue
 
-            if tag.name == 'h3' and tag.get('class') == ['gs_rt'] and tag.a:
+            if tag.name == 'h3' and has_class(tag, 'gs_rt') and tag.a:
                 self.article['title'] = ''.join(tag.a.findAll(text=True))
                 self.article['url'] = self._path2url(tag.a['href'])
 
-            if tag.name == 'div' and tag.get('class') == ['gs_a']:
+            if tag.name == 'div' and has_class(tag, 'gs_a'):
                 year = self.year_re.findall(tag.text)
                 self.article['year'] = year[0] if len(year) > 0 else None
 
-            if tag.name == 'div' and tag.get('class') == ['gs_fl']:
+            if tag.name == 'div' and has_class(tag, 'gs_fl'):
                 self._parse_links(tag)
 
         if self.article['title']:
@@ -259,7 +275,7 @@ class ScholarParser120726(ScholarParser):
             if not hasattr(tag, 'name'):
                 continue
 
-            if tag.name == 'div' and tag.get('class') == ['gs_ri']:
+            if tag.name == 'div' and has_class(tag, 'gs_ri'):
               if tag.a:
                 self.article['title'] = ''.join(tag.a.findAll(text=True))
                 self.article['url'] = self._path2url(tag.a['href'])
