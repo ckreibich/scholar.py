@@ -112,7 +112,9 @@ class Article(object):
                       'num_versions':  [0,    'Versions',       3],
                       'url_citations': [None, 'Citations list', 4],
                       'url_versions':  [None, 'Versions list',  5],
-                      'year':          [None, 'Year',           6]}
+                      'year':          [None, 'Year',           6],
+                      'url_pdf':       [None, 'PDF file',       7]}
+
 
     def __getitem__(self, key):
         if key in self.attrs:
@@ -205,7 +207,7 @@ class ScholarParser(object):
         for tag in span:
             if not hasattr(tag, 'name'):
                 continue
-            if tag.name != 'a' or tag.get('href') == None:
+            if tag.name != 'a' or tag.get('href') is None:
                 continue
 
             if tag.get('href').startswith('/scholar?cites'):
@@ -219,6 +221,11 @@ class ScholarParser(object):
                     self.article['num_versions'] = \
                         self._as_int(tag.string.split()[1])
                 self.article['url_versions'] = self._path2url(tag.get('href'))
+
+            if tag.get('href').lower().find('.pdf') > 0:
+                self.article['url_pdf'] = self._path2url(tag.get('href'))
+
+
 
     @staticmethod
     def _tag_has_class(tag, klass):
@@ -290,6 +297,10 @@ class ScholarParser120726(ScholarParser):
         for tag in div:
             if not hasattr(tag, 'name'):
                 continue
+            if str(tag).lower().find('.pdf'):
+                if tag.find('div', {'class': 'gs_ttss'}):
+                    self._parse_links(tag.find('div', {'class': 'gs_ttss'}))
+
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_ri'):
                 if tag.a:
                     self.article['title'] = ''.join(tag.a.findAll(text=True))
