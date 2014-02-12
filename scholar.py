@@ -326,6 +326,7 @@ class ScholarQuerier(object):
     """
     SCHOLAR_URL = 'http://scholar.google.com/scholar?hl=en&q=%(query)s+author:%(author)s&btnG=Search&as_subj=eng&as_sdt=1,5&as_ylo=&as_vis=0'
     NOAUTH_URL = 'http://scholar.google.com/scholar?hl=en&q=%(query)s&btnG=Search&as_subj=eng&as_std=1,5&as_ylo=&as_vis=0'
+    BYCLUSTER_URL = 'http://scholar.google.com/scholar?cluster=%(query)s'
 
     # Older URLs:
     # http://scholar.google.com/scholar?q=%s&hl=en&btnG=Search&as_sdt=2001&as_sdtp=on
@@ -340,14 +341,16 @@ class ScholarQuerier(object):
         def handle_article(self, art):
             self.querier.add_article(art)
 
-    def __init__(self, author='', scholar_url=None, count=0):
+    def __init__(self, author='', scholar_url=None, count=0, bycluster=False):
         self.articles = []
         self.author = author
         # Clip to 100, as Google doesn't support more anyway
         self.count = min(count, 100)
 
-        if author == '':
+        if author == '' and not bycluster:
             self.scholar_url = self.NOAUTH_URL
+        elif bycluster:
+            self.scholar_url = self.BYCLUSTER_URL
         else:
             self.scholar_url = scholar_url or self.SCHOLAR_URL
 
@@ -369,6 +372,18 @@ class ScholarQuerier(object):
         html = hdl.read()
         self.parse(html)
 
+    def querybycluster(self, search):
+        """
+        This method initiates a query by cluster id with subsequent parsing of the
+        response.
+        """
+        self.clear_articles()
+        url = self.scholar_url % {'query': quote(encode(search))}
+        req = Request(url=url, headers={'User-Agent': self.USER_AGENT})
+        hdl = self.opener.open(req)
+        html = hdl.read()
+        self.parse(html)
+
     def parse(self, html):
         """
         This method allows parsing of existing HTML content.
@@ -384,18 +399,24 @@ class ScholarQuerier(object):
         self.articles = []
 
 
-def txt(query, author, count):
-    querier = ScholarQuerier(author=author, count=count)
-    querier.query(query)
+def txt(query, author, count, bycluster=False):
+    querier = ScholarQuerier(author=author, count=count, bycluster=bycluster)
+    if bycluster:
+        querier.querybycluster(query)
+    else:
+        querier.query(query)
     articles = querier.articles
     if count > 0:
         articles = articles[:count]
     for art in articles:
         print(art.as_txt() + '\n')
 
-def csv(query, author, count, header=False, sep='|'):
-    querier = ScholarQuerier(author=author, count=count)
-    querier.query(query)
+def csv(query, author, count, bycluster=False, header=False, sep='|'):
+    querier = ScholarQuerier(author=author, count=count, bycluster=bycluster)
+    if bycluster:
+        querier.querybycluster(query)
+    else:
+        querier.query(query)
     articles = querier.articles
     if count > 0:
         articles = articles[:count]
@@ -422,6 +443,9 @@ Example: scholar.py -c 1 --txt --author einstein quantum"""
                       help='Print article data in text format')
     parser.add_option('-c', '--count', type='int',
                       help='Maximum number of results')
+    parser.add_option('--clusterid', action='store_true',
+                      help='Search by cluster id')
+
     parser.set_defaults(count=0, author='')
     options, args = parser.parse_args()
 
@@ -433,11 +457,11 @@ Example: scholar.py -c 1 --txt --author einstein quantum"""
     query = ' '.join(args)
 
     if options.csv:
-        csv(query, author=options.author, count=options.count)
+        csv(query, author=options.author, count=options.count, bycluster=options.clusterid)
     elif options.csv_header:
-        csv(query, author=options.author, count=options.count, header=True)
+        csv(query, author=options.author, count=options.count, bycluster=options.clusterid, header=True)
     else:
-        txt(query, author=options.author, count=options.count)
+        txt(query, author=options.author, count=options.count, bycluster=options.clusterid)
 
     return 0
 
