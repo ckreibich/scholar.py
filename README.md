@@ -20,12 +20,17 @@ Example
 Try scholar.py --help for all available options. A simple example:
 
     $ scholar.py -c 1 --txt --author einstein quantum
-             Title Physics and reality
-               URL http://www.sciencedirect.com/science/article/pii/S0016003236910475
-         Citations 322
-          Versions 5
-    Citations list http://scholar.google.com/scholar?cites=6799563874330167610&as_sdt=2005&sciodt=1,5&hl=en
-     Versions list http://scholar.google.com/scholar?cluster=6799563874330167610&hl=en&as_sdt=1,5&as_subj=eng
+	Title Can quantum-mechanical description of physical reality be considered complete?
+        	   URL http://prola.aps.org/abstract/PR/v47/i10/p777_1
+	     Citations 12088
+	      Versions 160
+	Citations list http://scholar.google.com/scholar?cites=8174092782678430881&as_sdt=2005&sciodt=1,5&hl=en&num=1
+	 Versions list http://scholar.google.com/scholar?cluster=8174092782678430881&hl=en&num=1&as_sdt=1,5
+	          Year 1935
+	      PDF file http://www.df.uba.ar/users/giribet/f4/mq1.pdf
+
+
+
  
 License
 -------
