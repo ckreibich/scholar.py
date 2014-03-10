@@ -21,7 +21,8 @@ Example
 
 Try scholar.py --help for all available options. Note, the command line arguments changed considerably in version 2.0! A few examples:
 
-    # Retrieve one article written by Einstein on quantum theory:
+Retrieve one article written by Einstein on quantum theory:
+
     $ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory"
              Title On the quantum theory of radiation
                URL http://icole.mut-es.ac.ir/downloads/Sci_Sec/W1/Einstein%201917.pdf
@@ -32,7 +33,8 @@ Try scholar.py --help for all available options. Note, the command line argument
               Year 1917
      Citation link None
 
-    # Retrieve a BibTeX entry for that quantum theory paper:
+Retrieve a BibTeX entry for that quantum theory paper:
+
     $ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation bt
     @article{einstein1917quantum,
       title={On the quantum theory of radiation},
