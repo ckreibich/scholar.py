@@ -13,7 +13,7 @@ page. It is not a recursive crawler.
 #         Google Scholar
 #
 #       - Support for retrieval of external citation formats, such as
-#         BibTex or EndNote
+#         BibTeX or EndNote
 #
 #       - Simple logging framework to track activity during execution
 #
@@ -748,7 +748,7 @@ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation 
     group.add_option('--csv-header', action='store_true',
                      help='Like --csv, but print header with column names')
     group.add_option('--citation', metavar='FORMAT', default=None,
-                     help='Print article details in standard citation format. Argument Must be one of "bt" (BibTex), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
+                     help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Miscellaneous')
