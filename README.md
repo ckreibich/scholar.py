@@ -12,21 +12,38 @@ Features
 --------
 
 * Extracts publication title, main online URL, number of citations, number of online versions, link to Google Scholar's main cluster for the work, and Google Scholar's cluster of all works referencing the publication.
-* Prints entries in CSV format or plain text.
+* Supports the full range of advanced query options provided by Google Scholar, such as title-only search or publication date timeframes.
+* Supports retrieval of citation details in standard external formats as provided by Google Scholar, including BibTeX and EndNote.
+* Command-line tool prints entries in CSV format, simple plain text, or in the citation export format.
 
 Example
 -------
 
-Try scholar.py --help for all available options. A simple example:
+Try scholar.py --help for all available options. Note, the command line arguments changed considerably in version 2.0! A few examples:
 
-    $ scholar.py -c 1 --txt --author einstein quantum
-             Title Physics and reality
-               URL http://www.sciencedirect.com/science/article/pii/S0016003236910475
-         Citations 322
-          Versions 5
-    Citations list http://scholar.google.com/scholar?cites=6799563874330167610&as_sdt=2005&sciodt=1,5&hl=en
-     Versions list http://scholar.google.com/scholar?cluster=6799563874330167610&hl=en&as_sdt=1,5&as_subj=eng
- 
+    # Retrieve one article written by Einstein on quantum theory:
+    $ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory"
+             Title On the quantum theory of radiation
+               URL http://icole.mut-es.ac.ir/downloads/Sci_Sec/W1/Einstein%201917.pdf
+         Citations 184
+          Versions 3
+    Citations list http://scholar.google.com/scholar?cites=17749203648027613321&as_sdt=2005&sciodt=0,5&hl=en&num=1
+     Versions list http://scholar.google.com/scholar?cluster=17749203648027613321&hl=en&num=1&as_sdt=0,5
+              Year 1917
+     Citation link None
+
+    # Retrieve a BibTeX entry for that quantum theory paper:
+    $ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation bt
+    @article{einstein1917quantum,
+      title={On the quantum theory of radiation},
+      author={Einstein, Albert},
+      journal={Phys. Z},
+      volume={18},
+      pages={121--128},
+      year={1917}
+    }
+
+
 License
 -------
 
