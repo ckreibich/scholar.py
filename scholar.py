@@ -7,6 +7,18 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.1:  Additional features:
+#
+#       - Improved cookie support: the new --cookie-file options
+#         allows the reuse of a cookie across invocations of the tool;
+#         this allows higher query rates than would otherwise result
+#         when invoking scholar.py repeatedly.
+#
+#       - Workaround: remove the num= URL-encoded argument from parsed
+#         URLs. For some reason, Google Scholar decides to propagate
+#         the value from the original query into the URLs embedded in
+#         the results.
+#
 # 2.0:  Thorough overhaul of design, with substantial improvements:
 #
 #       - Full support for advanced search arguments provided by
@@ -76,6 +88,7 @@ page. It is not a recursive crawler.
 # POSSIBILITY OF SUCH DAMAGE.
 
 import optparse
+import os
 import sys
 import re
 
@@ -85,12 +98,12 @@ try:
     # pylint: disable-msg=E0611
     from urllib.request import HTTPCookieProcessor, Request, build_opener
     from urllib.parse import quote
-    from http.cookiejar import CookieJar
+    from http.cookiejar import MozillaCookieJar
 except ImportError:
     # Fallback for Python 2
     from urllib2 import Request, build_opener, HTTPCookieProcessor
     from urllib import quote
-    from cookielib import CookieJar
+    from cookielib import MozillaCookieJar
 
 # Import BeautifulSoup -- try 4 first, fall back to older
 try:
@@ -129,6 +142,10 @@ class ScholarConf(object):
     # USER_AGENT = 'Mozilla/5.0 (X11; U; FreeBSD i386; en-US; rv:1.9.2.9) Gecko/20100913 Firefox/3.6.9'
     # Let's update at this point (3/14):
     USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:27.0) Gecko/20100101 Firefox/27.0'
+
+    # If set, we will use this file to read/save cookies to enable
+    # cookie use across sessions.
+    COOKIE_JAR_FILE = None
 
 class ScholarUtils(object):
     """A wrapper for various utensils that come in handy."""
@@ -284,13 +301,21 @@ class ScholarArticleParser(object):
                 if hasattr(tag, 'string') and tag.string.startswith('Cited by'):
                     self.article['num_citations'] = \
                         self._as_int(tag.string.split()[-1])
-                self.article['url_citations'] = self._path2url(tag.get('href'))
+
+                # Weird Google Scholar behavior here: if the original
+                # search query came with a number-of-results limit,
+                # then this limit gets propagated to the URLs embedded
+                # in the results page as well. Same applies to
+                # versions URL in next if-block.
+                self.article['url_citations'] = \
+                    self._strip_url_arg('num', self._path2url(tag.get('href')))
 
             if tag.get('href').startswith('/scholar?cluster'):
                 if hasattr(tag, 'string') and tag.string.startswith('All '):
                     self.article['num_versions'] = \
                         self._as_int(tag.string.split()[1])
-                self.article['url_versions'] = self._path2url(tag.get('href'))
+                self.article['url_versions'] = \
+                    self._strip_url_arg('num', self._path2url(tag.get('href')))
 
             if tag.getText().startswith('Import'):
                 self.article['citlink'] = self._path2url(tag.get('href'))
@@ -327,6 +352,17 @@ class ScholarArticleParser(object):
         if not path.startswith('/'):
             path = '/' + path
         return self.site + path
+
+    def _strip_url_arg(self, arg, url):
+        """Helper, removes a URL-encoded argument, if present."""
+        parts = url.split('?', 1)
+        if len(parts) != 2:
+            return url
+        res = []
+        for part in parts[1].split('&'):
+            if not part.startswith(arg + '='):
+                res.append(part)
+        return parts[0] + '?' + '&'.join(res)
 
 
 class ScholarArticleParser120201(ScholarArticleParser):
@@ -544,7 +580,19 @@ class ScholarQuerier(object):
     def __init__(self):
         self.articles = []
         self.query = None
-        self.cjar = CookieJar()
+        self.cjar = MozillaCookieJar()
+
+        # If we have a cookie file, load it:
+        if ScholarConf.COOKIE_JAR_FILE and \
+           os.path.exists(ScholarConf.COOKIE_JAR_FILE):
+            try:
+                self.cjar.load(ScholarConf.COOKIE_JAR_FILE,
+                               ignore_discard=True)
+                ScholarUtils.log('debug', 'loaded cookies file')
+            except Exception as msg:
+                ScholarUtils.log('warn', 'could not load cookies file: %s' % msg)
+                self.cjar = MozillaCookieJar() # Just to be safe
+
         self.opener = build_opener(HTTPCookieProcessor(self.cjar))
         self.settings = None # Last settings object, if any
 
@@ -675,10 +723,25 @@ class ScholarQuerier(object):
         self.articles.append(art)
 
     def clear_articles(self):
-
         """Clears any existing articles stored from previous queries."""
         self.articles = []
 
+    def save_cookies(self):
+        """
+        This stores the latest cookies we're using to disk, for reuse in a
+        later session.
+        """
+        if ScholarConf.COOKIE_JAR_FILE is None:
+            return False
+        try:
+            self.cjar.save(ScholarConf.COOKIE_JAR_FILE,
+                           ignore_discard=True)
+            ScholarUtils.log('debug', 'saved cookies file')
+            return True
+        except Exception as msg:
+            ScholarUtils.log('warn', 'could not save cookies file: %s' % msg)
+            return False
+            
 
 def txt(querier):
     articles = querier.articles
@@ -696,6 +759,7 @@ def citation_export(querier):
     articles = querier.articles
     for art in articles:
         print(art.as_citation() + '\n')
+
 
 def main():
     usage = """scholar.py [options] <query string>
@@ -752,6 +816,8 @@ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation 
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Miscellaneous')
+    group.add_option('--cookie-file', metavar='FILE', default=None,
+                     help='File to use for cookie storage. If given, will read any existing cookies if found at startup, and save resulting cookies in the end.')
     group.add_option('-d', '--debug', action='store_true', default=False,
                      help='Enable verbose logging to stderr')
     group.add_option('-v', '--version', action='store_true', default=False,
@@ -771,6 +837,9 @@ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation 
     if options.version:
         print 'This is scholar.py %s.' % ScholarConf.VERSION
         return 0
+
+    if options.cookie_file:
+        ScholarConf.COOKIE_JAR_FILE = options.cookie_file
 
     querier = ScholarQuerier()
     settings = ScholarSettings()
@@ -821,6 +890,9 @@ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation 
         citation_export(querier)
     else:
         txt(querier)
+
+    if options.cookie_file:
+        querier.save_cookies()
 
     return 0
 
