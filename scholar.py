@@ -7,6 +7,10 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.2:  Added a logging option that reports full HTML contents, for
+#       debugging, as well as incrementally more detailed logging via
+#       -d up to -dddd.
+#
 # 2.1:  Additional features:
 #
 #       - Improved cookie support: the new --cookie-file options
@@ -134,7 +138,7 @@ class FormatError(Error):
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.0'
+    VERSION = '2.2'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 20 # Current maximum for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
@@ -152,7 +156,8 @@ class ScholarUtils(object):
 
     LOG_LEVELS = { 'error': 1,
                    'warn':  2,
-                   'debug': 3 }
+                   'info':  3,
+                   'debug': 4 }
 
     @staticmethod
     def ensure_int(arg, msg=None):
@@ -588,7 +593,7 @@ class ScholarQuerier(object):
             try:
                 self.cjar.load(ScholarConf.COOKIE_JAR_FILE,
                                ignore_discard=True)
-                ScholarUtils.log('debug', 'loaded cookies file')
+                ScholarUtils.log('info', 'loaded cookies file')
             except Exception as msg:
                 ScholarUtils.log('warn', 'could not load cookies file: %s' % msg)
                 self.cjar = MozillaCookieJar() # Just to be safe
@@ -609,13 +614,10 @@ class ScholarQuerier(object):
         # contents of the Settings pane HTML in order to extract
         # hidden fields before we can compose the query for updating
         # the settings.
-        try:
-            req = Request(url=self.GET_SETTINGS_URL,
-                          headers={'User-Agent': ScholarConf.USER_AGENT})
-            hdl = self.opener.open(req)
-            html = hdl.read()
-        except Exception as err:
-            ScholarUtils.log('debug', 'requesting settings failed: %s' % err)
+        html = self._get_http_response(url=self.GET_SETTINGS_URL,
+                                       log_msg='dump of settings form HTML',
+                                       err_msg='requesting settings failed')
+        if html is None:
             return False
 
         # Now parse the required stuff out of the form. We require the
@@ -625,12 +627,12 @@ class ScholarQuerier(object):
 
         tag = soup.find(name='form', attrs={'id': 'gs_settings_form'})
         if tag is None:
-            ScholarUtils.log('debug', 'parsing settings failed: no form')
+            ScholarUtils.log('info', 'parsing settings failed: no form')
             return False
 
         tag = tag.find('input', attrs={'type':'hidden', 'name':'scisig'})
         if tag is None:
-            ScholarUtils.log('debug', 'parsing settings failed: scisig')
+            ScholarUtils.log('info', 'parsing settings failed: scisig')
             return False
 
         urlargs = {'scisig': tag['value'],
@@ -642,15 +644,13 @@ class ScholarQuerier(object):
             urlargs['scis'] = 'yes'
             urlargs['scisf'] = '&scisf=%d' % settings.citform
 
-        try:
-            req = Request(url=self.SET_SETTINGS_URL % urlargs,
-                          headers={'User-Agent': ScholarConf.USER_AGENT})
-            hdl = self.opener.open(req)
-        except Exception as err:
-            ScholarUtils.log('debug', 'applying settings failed: %s' % err)
+        html = self._get_http_response(url=self.SET_SETTINGS_URL % urlargs,
+                                       log_msg='dump of settings result HTML',
+                                       err_msg='applying setttings failed')
+        if html is None:
             return False
 
-        ScholarUtils.log('debug', 'settings applied')
+        ScholarUtils.log('info', 'settings applied')
         return True
 
     def send_query(self, query, scholar_url=None):
@@ -672,18 +672,17 @@ class ScholarQuerier(object):
                    'pub': query.pub or '',
                    'ylo': query.timeframe[0] or '',
                    'yhi': query.timeframe[1] or '',
-                   'num': query.num_results or ScholarConf.MAX_PAGE_RESULTS } 
+                   'num': query.num_results or ScholarConf.MAX_PAGE_RESULTS }
 
         # Make sure we urlencode all this stuff correctly:
         for key, val in urlargs.items():
             urlargs[key] = quote(str(val))
 
-        url = url % urlargs
-
-        ScholarUtils.log('debug', 'query url: %s' % url)
-        req = Request(url=url, headers={'User-Agent': ScholarConf.USER_AGENT})
-        hdl = self.opener.open(req)
-        html = hdl.read()
+        html = self._get_http_response(url=url % urlargs,
+                                       log_msg='dump of query response HTML',
+                                       err_msg='results retrieval failed')
+        if html is None:
+            return
 
         self.parse(html)
 
@@ -697,18 +696,15 @@ class ScholarQuerier(object):
             return False
         if article.citation_data is not None:
             return True
-        try:
-            ScholarUtils.log('debug', 'retrieving citation export from %s' \
-                             % article['citlink'])
-            req = Request(url=article['citlink'],
-                          headers={'User-Agent': ScholarConf.USER_AGENT})
-            hdl = self.opener.open(req)
-            data = hdl.read()
-            article.set_citation_data(data)
-        except Exception as err:
-            ScholarUtils.log('debug', 'requesting citation failed: %s' % err)
+
+        ScholarUtils.log('info', 'retrieving citation export data')
+        data = self._get_http_response(url=article['citlink'],
+                                       log_msg='citation data response',
+                                       err_msg='requesting citation data failed')
+        if data is None:
             return False
 
+        article.set_citation_data(data)
         return True
 
     def parse(self, html):
@@ -736,12 +732,40 @@ class ScholarQuerier(object):
         try:
             self.cjar.save(ScholarConf.COOKIE_JAR_FILE,
                            ignore_discard=True)
-            ScholarUtils.log('debug', 'saved cookies file')
+            ScholarUtils.log('info', 'saved cookies file')
             return True
         except Exception as msg:
             ScholarUtils.log('warn', 'could not save cookies file: %s' % msg)
             return False
-            
+
+    def _get_http_response(self, url, log_msg=None, err_msg=None):
+        """
+        Helper method, sends HTTP request and returns response payload.
+        """
+        if log_msg is None:
+            log_msg = 'HTTP response data follow'
+        if err_msg is None:
+            err_msg = 'request failed'
+        try:
+            ScholarUtils.log('info', 'requesting %s' % url)
+
+            req = Request(url=url, headers={'User-Agent': ScholarConf.USER_AGENT})
+            hdl = self.opener.open(req)
+            html = hdl.read()
+
+            ScholarUtils.log('debug', log_msg)
+            ScholarUtils.log('debug', '>>>>' + '-'*68)
+            ScholarUtils.log('debug', 'url: %s' % hdl.geturl())            
+            ScholarUtils.log('debug', 'result: %s' % hdl.getcode())
+            ScholarUtils.log('debug', 'headers:\n' + str(hdl.info()))
+            ScholarUtils.log('debug', 'data:\n' + html)
+            ScholarUtils.log('debug', '<<<<' + '-'*68)
+
+            return html
+        except Exception as err:
+            ScholarUtils.log('info', err_msg + ': %s' % err)
+            return None
+
 
 def txt(querier):
     articles = querier.articles
@@ -798,7 +822,7 @@ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation 
     group.add_option('--after', metavar='YEAR', default=None,
                      help='Results must have appeared in or after given year')
     group.add_option('--before', metavar='YEAR', default=None,
-                     help='Results must have appeared in or before given year')                    
+                     help='Results must have appeared in or before given year')
     group.add_option('-c', '--count', type='int', default=None,
                      help='Maximum number of results')
     parser.add_option_group(group)
@@ -818,21 +842,23 @@ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation 
     group = optparse.OptionGroup(parser, 'Miscellaneous')
     group.add_option('--cookie-file', metavar='FILE', default=None,
                      help='File to use for cookie storage. If given, will read any existing cookies if found at startup, and save resulting cookies in the end.')
-    group.add_option('-d', '--debug', action='store_true', default=False,
-                     help='Enable verbose logging to stderr')
+    group.add_option('-d', '--debug', action='count', default=0,
+                     help='Enable verbose logging to stderr. Repeated options increase detail of debug output.')
     group.add_option('-v', '--version', action='store_true', default=False,
                      help='Show version information')
     parser.add_option_group(group)
 
-    options, args = parser.parse_args()
+    options, _ = parser.parse_args()
 
     # Show help if we have neither keyword search nor author name
     if len(sys.argv) == 1:
         parser.print_help()
         return 1
 
-    if options.debug:
-        ScholarConf.LOG_LEVEL = ScholarUtils.LOG_LEVELS['debug']
+    if options.debug > 0:
+        options.debug = min(options.debug, ScholarUtils.LOG_LEVELS['debug'])
+        ScholarConf.LOG_LEVEL = options.debug
+        ScholarUtils.log('info', 'using log level %d' % ScholarConf.LOG_LEVEL)
 
     if options.version:
         print 'This is scholar.py %s.' % ScholarConf.VERSION
