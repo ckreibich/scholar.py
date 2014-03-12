@@ -60,7 +60,7 @@ Note the cluster ID in the above. Using this ID, you can directly access the clu
           PDF link http://web.ihep.su/dbserv/compas/src/einstein17/eng.pdf
 
 
-Let's retrieve a BibTeX entry for that quantum theory paper. The best BibTex often seems to be the one linked from search results, not those in the article cluster, so let's do a search again:
+Let's retrieve a BibTeX entry for that quantum theory paper. The best BibTeX often seems to be the one linked from search results, not those in the article cluster, so let's do a search again:
 
     $ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation bt
     @article{einstein1917quantum,
