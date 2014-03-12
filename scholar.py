@@ -467,7 +467,6 @@ class ScholarArticleParser120726(ScholarArticleParser):
 class ScholarQuery(object):
     """
     The base class for any kind of results query we send to Scholar.
-    XXX: could handle management of number of results globally, here.
     """
     def __init__(self):
         self.url = None
