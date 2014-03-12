@@ -417,6 +417,8 @@ class ScholarArticleParser120201(ScholarArticleParser):
             if tag.name == 'h3' and self._tag_has_class(tag, 'gs_rt') and tag.a:
                 self.article['title'] = ''.join(tag.a.findAll(text=True))
                 self.article['url'] = self._path2url(tag.a['href'])
+                if self.article['url'].endswith('.pdf'):
+                    self.article['url_pdf'] = self.article['url']
 
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_a'):
                 year = self.year_re.findall(tag.text)
