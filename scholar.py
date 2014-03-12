@@ -7,6 +7,17 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.3:  Additional features:
+#
+#       - Direct extraction of first PDF version of an article
+#
+#       - Ability to pull up an article cluster's results directly.
+#
+#       This is based on work from @aliparsai on GitHub -- thanks!
+#
+#       - Suppress missing search results (so far shown as "None" in
+#         the textual output form.
+#
 # 2.2:  Added a logging option that reports full HTML contents, for
 #       debugging, as well as incrementally more detailed logging via
 #       -d up to -dddd.
@@ -135,10 +146,14 @@ class FormatError(Error):
     """A query argument or setting was formatted incorrectly."""
 
 
+class QueryArgumentError(Error):
+    """A query did not have a suitable set of arguments."""
+
+
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.2'
+    VERSION = '2.3'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 20 # Current maximum for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
@@ -185,12 +200,14 @@ class ScholarArticle(object):
         self.attrs = {
             'title':         [None, 'Title',          0],
             'url':           [None, 'URL',            1],
-            'num_citations': [0,    'Citations',      2],
-            'num_versions':  [0,    'Versions',       3],
-            'url_citations': [None, 'Citations list', 4],
-            'url_versions':  [None, 'Versions list',  5],
-            'year':          [None, 'Year',           6],
-            'citlink':       [None, 'Citation link',  7],
+            'year':          [None, 'Year',           2],
+            'num_citations': [0,    'Citations',      3],
+            'num_versions':  [0,    'Versions',       4],
+            'cluster_id':    [None, 'Cluster ID',     5],
+            'url_pdf':       [None, 'PDF link',       5],
+            'url_citations': [None, 'Citations list', 6],
+            'url_versions':  [None, 'Versions list',  7],
+            'url_citation':  [None, 'Citation link',  9],
         }
 
         # The citation data in one of the standard export formats,
@@ -224,7 +241,11 @@ class ScholarArticle(object):
         # Find largest label length:
         max_label_len = max([len(str(item[1])) for item in items])
         fmt = '%%%ds %%s' % max_label_len
-        return '\n'.join([fmt % (item[1], item[0]) for item in items])
+        res = []
+        for item in items:
+            if item[0] is not None:
+                res.append(fmt % (item[1], item[0]))
+        return '\n'.join(res)
 
     def as_csv(self, header=False, sep='|'):
         # Get keys sorted in specified order:
@@ -283,6 +304,8 @@ class ScholarArticleParser(object):
                     tag.h3 and tag.h3.a:
                 self.article['title'] = ''.join(tag.h3.a.findAll(text=True))
                 self.article['url'] = self._path2url(tag.h3.a['href'])
+                if self.article['url'].endswith('.pdf'):
+                    self.article['url_pdf'] = self.article['url']
 
             if tag.name == 'font':
                 for tag2 in tag:
@@ -299,7 +322,7 @@ class ScholarArticleParser(object):
         for tag in span:
             if not hasattr(tag, 'name'):
                 continue
-            if tag.name != 'a' or tag.get('href') == None:
+            if tag.name != 'a' or tag.get('href') is None:
                 continue
 
             if tag.get('href').startswith('/scholar?cites'):
@@ -315,6 +338,14 @@ class ScholarArticleParser(object):
                 self.article['url_citations'] = \
                     self._strip_url_arg('num', self._path2url(tag.get('href')))
 
+                # We can also extract the cluster ID from the versions
+                # URL. Note that we know that the string contains "?",
+                # from the above if-statement.
+                args = self.article['url_citations'].split('?', 1)[1]
+                for arg in args.split('&'):
+                    if arg.startswith('cites='):
+                        self.article['cluster_id'] = arg[6:]
+
             if tag.get('href').startswith('/scholar?cluster'):
                 if hasattr(tag, 'string') and tag.string.startswith('All '):
                     self.article['num_versions'] = \
@@ -323,7 +354,8 @@ class ScholarArticleParser(object):
                     self._strip_url_arg('num', self._path2url(tag.get('href')))
 
             if tag.getText().startswith('Import'):
-                self.article['citlink'] = self._path2url(tag.get('href'))
+                self.article['url_citation'] = self._path2url(tag.get('href'))
+
 
     @staticmethod
     def _tag_has_class(tag, klass):
@@ -408,10 +440,16 @@ class ScholarArticleParser120726(ScholarArticleParser):
         for tag in div:
             if not hasattr(tag, 'name'):
                 continue
+            if str(tag).lower().find('.pdf'):
+                if tag.find('div', {'class': 'gs_ttss'}):
+                    self._parse_links(tag.find('div', {'class': 'gs_ttss'}))
+
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_ri'):
                 if tag.a:
                     self.article['title'] = ''.join(tag.a.findAll(text=True))
                     self.article['url'] = self._path2url(tag.a['href'])
+                    if self.article['url'].endswith('.pdf'):
+                        self.article['url_pdf'] = self.article['url']
 
                 if tag.find('div', {'class': 'gs_a'}):
                     year = self.year_re.findall(tag.find('div', {'class': 'gs_a'}).text)
@@ -426,12 +464,78 @@ class ScholarArticleParser120726(ScholarArticleParser):
 
 class ScholarQuery(object):
     """
-    This is the base class for any kind of search query we send
-    off. It includes the search query parameters the user is
-    interested in. These are directly modelled after the search fields
-    you see on the Scholar website in the advanced search options.
+    The base class for any kind of results query we send to Scholar.
+    XXX: could handle management of number of results globally, here.
     """
     def __init__(self):
+        self.url = None
+        self.num_results = ScholarConf.MAX_PAGE_RESULTS
+
+    def set_num_page_results(self, num_page_results):
+        msg = 'maximum number of results on page must be numeric'
+        self.num_results = ScholarUtils.ensure_int(num_page_results, msg)
+
+    def get_url(self):
+        """
+        Returns a complete, submittable URL string for this particular
+        query instance. The URL and its arguments will vary depending
+        on the query.
+        """
+        return None
+
+class ClusterScholarQuery(ScholarQuery):
+    """
+    This version just pulls up an article cluster whose ID we already
+    know about.
+    """
+    SCHOLAR_CLUSTER_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
+        + 'cluster=%(cluster)s' \
+        + '&num=%(num)s'
+
+    def __init__(self, cluster=None):
+        ScholarQuery.__init__(self)
+        self.cluster = None
+        self.set_cluster(cluster)
+
+    def set_cluster(self, cluster):
+        """
+        Sets search to a Google Scholar results cluster ID.
+        """
+        msg = 'cluster ID must be numeric'
+        self.cluster = ScholarUtils.ensure_int(cluster, msg)
+
+    def get_url(self):
+        if self.cluster is None:
+            raise QueryArgumentError('cluster query needs cluster ID')
+        
+        urlargs = { 'cluster': self.cluster,
+                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS }
+
+        for key, val in urlargs.items():
+            urlargs[key] = quote(str(val))
+
+        return self.SCHOLAR_CLUSTER_URL % urlargs
+
+
+class SearchScholarQuery(ScholarQuery):
+    """
+    This version represents the search query parameters the user can
+    configure on the Scholar website, in the advanced search options.
+    """
+    SCHOLAR_QUERY_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
+        + 'as_q=%(words)s' \
+        + '&as_epq=%(phrase)s' \
+        + '&as_oq=%(words_some)s' \
+        + '&as_eq=%(words_none)s' \
+        + '&as_occt=%(scope)s' \
+        + '&as_sauthors=%(authors)s' \
+        + '&as_publication=%(pub)s' \
+        + '&as_ylo=%(ylo)s' \
+        + '&as_yhi=%(yhi)s' \
+        + '&btnG=&hl=en&as_sdt=0,5&num=%(num)s'
+
+    def __init__(self):
+        ScholarQuery.__init__(self)
         self.words = None # The default search behavior
         self.words_some = None # At least one of those words
         self.words_none = None # None of these words
@@ -440,8 +544,6 @@ class ScholarQuery(object):
         self.author = None 
         self.pub = None
         self.timeframe = [None, None]
-        self.cluster = None
-        self.num_results = ScholarConf.MAX_PAGE_RESULTS
 
     def set_words(self, words):
         """Sets words that *all* must be found in the result."""
@@ -485,18 +587,28 @@ class ScholarQuery(object):
             end = ScholarUtils.ensure_int(end)
         self.timeframe = [start, end]
 
-    def set_cluster(self, cluster):
-        """
-        Sets search to a Google Scholar results cluster ID. This means
-        we don't really conduct a search, we just pull up the
-        information about a cluster we already know about.
-        """
-        msg = 'cluster ID must be numeric'
-        self.cluster = ScholarUtils.ensure_int(cluster, msg)
+    def get_url(self):
+        if self.words is None and self.words_some is None \
+           and self.words_none is None and self.phrase is None \
+           and self.author is None and self.pub is None \
+           and self.timeframe[0] is None and self.timeframe[1] is None:
+            raise QueryArgumentError('search query needs more parameters')
 
-    def set_num_page_results(self, num_page_results):
-        msg = 'maximum number of results on page must be numeric'
-        self.num_results = ScholarUtils.ensure_int(num_page_results, msg)
+        urlargs = { 'words': self.words or '',
+                    'words_some': self.words_some or '',
+                    'words_none': self.words_none or '',
+                    'phrase': self.phrase or '',
+                    'scope': 'title' if self.scope_title else 'any',
+                    'authors': self.author or '',
+                    'pub': self.pub or '',
+                    'ylo': self.timeframe[0] or '',
+                    'yhi': self.timeframe[1] or '',
+                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS }
+
+        for key, val in urlargs.items():
+            urlargs[key] = quote(str(val))
+
+        return self.SCHOLAR_QUERY_URL % urlargs
 
 
 class ScholarSettings(object):
@@ -544,17 +656,6 @@ class ScholarQuerier(object):
     articles found are collected in the articles member, a list of
     ScholarArticle instances.
     """
-    SCHOLAR_QUERY_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
-        + 'as_q=%(words)s' \
-        + '&as_epq=%(phrase)s' \
-        + '&as_oq=%(words_some)s' \
-        + '&as_eq=%(words_none)s' \
-        + '&as_occt=%(scope)s' \
-        + '&as_sauthors=%(authors)s' \
-        + '&as_publication=%(pub)s' \
-        + '&as_ylo=%(ylo)s' \
-        + '&as_yhi=%(yhi)s' \
-        + '&btnG=&hl=en&as_sdt=0,5&num=%(num)s'
 
     # Default URLs for visiting and submitting Settings pane, as of 3/14
     GET_SETTINGS_URL = ScholarConf.SCHOLAR_SITE + '/scholar_settings?' \
@@ -653,7 +754,7 @@ class ScholarQuerier(object):
         ScholarUtils.log('info', 'settings applied')
         return True
 
-    def send_query(self, query, scholar_url=None):
+    def send_query(self, query):
         """
         This method initiates a search query (a ScholarQuery instance)
         with subsequent parsing of the response.
@@ -661,24 +762,7 @@ class ScholarQuerier(object):
         self.clear_articles()
         self.query = query
 
-        url = scholar_url if scholar_url else self.SCHOLAR_QUERY_URL
-
-        urlargs = {'words': query.words or '',
-                   'words_some': query.words_some or '',
-                   'words_none': query.words_none or '',
-                   'phrase': query.phrase or '',
-                   'scope': 'title' if query.scope_title else 'any',
-                   'authors': query.author or '',
-                   'pub': query.pub or '',
-                   'ylo': query.timeframe[0] or '',
-                   'yhi': query.timeframe[1] or '',
-                   'num': query.num_results or ScholarConf.MAX_PAGE_RESULTS }
-
-        # Make sure we urlencode all this stuff correctly:
-        for key, val in urlargs.items():
-            urlargs[key] = quote(str(val))
-
-        html = self._get_http_response(url=url % urlargs,
+        html = self._get_http_response(url=query.get_url(),
                                        log_msg='dump of query response HTML',
                                        err_msg='results retrieval failed')
         if html is None:
@@ -692,13 +776,13 @@ class ScholarQuerier(object):
         you adjusted the settings to tell Google Scholar to actually
         provide this information, *prior* to retrieving the article.
         """
-        if article['citlink'] is None:
+        if article['url_citation'] is None:
             return False
         if article.citation_data is not None:
             return True
 
         ScholarUtils.log('info', 'retrieving citation export data')
-        data = self._get_http_response(url=article['citlink'],
+        data = self._get_http_response(url=article['url_citation'],
                                        log_msg='citation data response',
                                        err_msg='requesting citation data failed')
         if data is None:
@@ -794,12 +878,12 @@ Examples:
 # Retrieve one article written by Einstein on quantum theory:
 scholar.py -c 1 --author "albert einstein" --phrase "quantum theory"
 
+# Retrieve a BibTeX entry for that quantum theory paper:
+scholar.py -c 1 -C 17749203648027613321 --citation bt
+
 # Retrieve five articles written by Einstein after 1970 where the title
 # does not contain the words "quantum" and "theory":
-scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970
-
-# Retrieve a BibTeX entry for that quantum theory paper:
-scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation bt"""
+scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     fmt = optparse.IndentedHelpFormatter(max_help_position=50, width=100)
     parser = optparse.OptionParser(usage=usage, formatter=fmt)
@@ -823,6 +907,8 @@ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation 
                      help='Results must have appeared in or after given year')
     group.add_option('--before', metavar='YEAR', default=None,
                      help='Results must have appeared in or before given year')
+    group.add_option('-C', '--cluster-id', metavar='CLUSTER_ID', default=None,
+                     help='Do not search, just use articles in given cluster ID')
     group.add_option('-c', '--count', type='int', default=None,
                      help='Maximum number of results')
     parser.add_option_group(group)
@@ -867,6 +953,15 @@ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation 
     if options.cookie_file:
         ScholarConf.COOKIE_JAR_FILE = options.cookie_file
 
+    # Sanity-check the options: if they include a cluster ID query, it
+    # makes no sense to have search arguments:
+    if options.cluster_id is not None:
+        if options.author or options.allw or options.some or options.none \
+           or options.phrase or options.title_only or options.pub \
+           or options.after or options.before:            
+            print 'Cluster ID queries do not allow additional search arguments.'
+            return 1
+
     querier = ScholarQuerier()
     settings = ScholarSettings()
 
@@ -884,24 +979,27 @@ scholar.py -c 1 --author "albert einstein" --phrase "quantum theory" --citation 
 
     querier.apply_settings(settings)
 
-    query = ScholarQuery()
+    if options.cluster_id:
+        query = ClusterScholarQuery(cluster=options.cluster_id)
+    else:
+        query = SearchScholarQuery()
+        if options.author:
+            query.set_author(options.author)
+        if options.allw:
+            query.set_words(options.allw)
+        if options.some:
+            query.set_words_some(options.some)
+        if options.none:
+            query.set_words_none(options.none)
+        if options.phrase:
+            query.set_phrase(options.phrase)
+        if options.title_only:
+            query.set_scope(True)
+        if options.pub:
+            query.set_pub(options.pub)
+        if options.after or options.before:
+            query.set_timeframe(options.after, options.before)
 
-    if options.author:
-        query.set_author(options.author)
-    if options.allw:
-        query.set_words(options.allw)
-    if options.some:
-        query.set_words_some(options.some)
-    if options.none:
-        query.set_words_none(options.none)
-    if options.phrase:
-        query.set_phrase(options.phrase)
-    if options.title_only:
-        query.set_scope(True)
-    if options.pub:
-        query.set_pub(options.pub)
-    if options.after or options.before:
-        query.set_timeframe(options.after, options.before)
     if options.count is not None:
         options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
         query.set_num_page_results(options.count)
