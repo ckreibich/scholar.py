@@ -18,6 +18,14 @@ Features
 * Command-line tool prints entries in CSV format, simple plain text, or in the citation export format.
 * Cookie support for higher query volume, including ability to persist cookies to disk across invocations.
 
+Note
+----
+
+I will always strive to add features that increase the power of this
+API, but I will never add features that intentionally try to work
+around the query limits imposed by Google Scholar. Please don't ask me
+to add such features.
+
 Example
 -------
 
