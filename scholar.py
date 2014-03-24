@@ -7,6 +7,14 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.4:  Bugfixes:
+#
+#       - Correctly handle Unicode characters when reporting results
+#         in text format.
+#
+#       - Correctly parse citation-only (i.e. linkless) results in
+#         Google Scholar results.
+#
 # 2.3:  Additional features:
 #
 #       - Direct extraction of first PDF version of an article
@@ -153,7 +161,7 @@ class QueryArgumentError(Error):
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.3'
+    VERSION = '2.4'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 20 # Current maximum for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
@@ -169,10 +177,10 @@ class ScholarConf(object):
 class ScholarUtils(object):
     """A wrapper for various utensils that come in handy."""
 
-    LOG_LEVELS = { 'error': 1,
-                   'warn':  2,
-                   'info':  3,
-                   'debug': 4 }
+    LOG_LEVELS = {'error': 1,
+                  'warn':  2,
+                  'info':  3,
+                  'debug': 4}
 
     @staticmethod
     def ensure_int(arg, msg=None):
@@ -226,7 +234,7 @@ class ScholarArticle(object):
         if key in self.attrs:
             self.attrs[key][0] = item
         else:
-            self.attrs[key] = [item, key, len(self.attrs)]            
+            self.attrs[key] = [item, key, len(self.attrs)]
 
     def __delitem__(self, key):
         if key in self.attrs:
@@ -287,11 +295,25 @@ class ScholarArticleParser(object):
 
     def parse(self, html):
         """
-        This method initiates parsing of HTML content.
+        This method initiates parsing of HTML content, cleans resulting
+        content as needed, and notifies the parser instance of
+        resulting instances via the handle_article callback.
         """
         self.soup = BeautifulSoup(html)
         for div in self.soup.findAll(ScholarArticleParser._tag_checker):
             self._parse_article(div)
+            self._clean_article()
+            if self.article['title']:
+                self.handle_article(self.article)
+
+    def _clean_article(self):
+        """
+        This gets invoked after we have parsed an article, to do any
+        needed cleanup/polishing before we hand off the resulting
+        article.
+        """
+        if self.article['title']:
+            self.article['title'] = self.article['title'].strip()
 
     def _parse_article(self, div):
         self.article = ScholarArticle()
@@ -314,9 +336,6 @@ class ScholarArticleParser(object):
                     if tag2.name == 'span' and \
                        self._tag_has_class(tag2, 'gs_fl'):
                         self._parse_links(tag2)
-
-        if self.article['title']:
-            self.handle_article(self.article)
 
     def _parse_links(self, span):
         for tag in span:
@@ -359,6 +378,7 @@ class ScholarArticleParser(object):
 
     @staticmethod
     def _tag_has_class(tag, klass):
+
         """
         This predicate function checks whether a BeatifulSoup Tag instance
         has a class attribute.
@@ -427,9 +447,6 @@ class ScholarArticleParser120201(ScholarArticleParser):
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_fl'):
                 self._parse_links(tag)
 
-        if self.article['title']:
-            self.handle_article(self.article)
-
 
 class ScholarArticleParser120726(ScholarArticleParser):
     """
@@ -447,11 +464,39 @@ class ScholarArticleParser120726(ScholarArticleParser):
                     self._parse_links(tag.find('div', {'class': 'gs_ttss'}))
 
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_ri'):
-                if tag.a:
-                    self.article['title'] = ''.join(tag.a.findAll(text=True))
-                    self.article['url'] = self._path2url(tag.a['href'])
+                # There are (at least) two formats here. In the first
+                # one, we have a link, e.g.:
+                #
+                # <h3 class="gs_rt">
+                #   <a href="http://dl.acm.org/citation.cfm?id=972384" class="yC0">
+                #     <b>Honeycomb</b>: creating intrusion detection signatures using
+                #        honeypots
+                #   </a>
+                # </h3>
+                #
+                # In the other, there's no actual link -- it's what
+                # Scholar renders as "CITATION" in the HTML:
+                #
+                # <h3 class="gs_rt">
+                #   <span class="gs_ctu">
+                #     <span class="gs_ct1">[CITATION]</span>
+                #     <span class="gs_ct2">[C]</span>
+                #   </span>
+                #   <b>Honeycomb</b> automated ids signature creation using honeypots
+                # </h3>
+                #
+                # We now distinguish the two.
+                try:
+                    atag = tag.h3.a
+                    self.article['title'] = ''.join(atag.findAll(text=True))
+                    self.article['url'] = self._path2url(atag['href'])
                     if self.article['url'].endswith('.pdf'):
                         self.article['url_pdf'] = self.article['url']
+                except:
+                    # Remove a few spans that have unneeded content (e.g. [CITATION])
+                    for span in tag.h3.findAll(name='span'):
+                        span.clear()
+                    self.article['title'] = ''.join(tag.h3.findAll(text=True))
 
                 if tag.find('div', {'class': 'gs_a'}):
                     year = self.year_re.findall(tag.find('div', {'class': 'gs_a'}).text)
@@ -459,9 +504,6 @@ class ScholarArticleParser120726(ScholarArticleParser):
 
                 if tag.find('div', {'class': 'gs_fl'}):
                     self._parse_links(tag.find('div', {'class': 'gs_fl'}))
-
-        if self.article['title']:
-            self.handle_article(self.article)
 
 
 class ScholarQuery(object):
@@ -483,6 +525,7 @@ class ScholarQuery(object):
         on the query.
         """
         return None
+
 
 class ClusterScholarQuery(ScholarQuery):
     """
@@ -508,9 +551,9 @@ class ClusterScholarQuery(ScholarQuery):
     def get_url(self):
         if self.cluster is None:
             raise QueryArgumentError('cluster query needs cluster ID')
-        
-        urlargs = { 'cluster': self.cluster,
-                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS }
+
+        urlargs = {'cluster': self.cluster,
+                   'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(str(val))
@@ -595,16 +638,16 @@ class SearchScholarQuery(ScholarQuery):
            and self.timeframe[0] is None and self.timeframe[1] is None:
             raise QueryArgumentError('search query needs more parameters')
 
-        urlargs = { 'words': self.words or '',
-                    'words_some': self.words_some or '',
-                    'words_none': self.words_none or '',
-                    'phrase': self.phrase or '',
-                    'scope': 'title' if self.scope_title else 'any',
-                    'authors': self.author or '',
-                    'pub': self.pub or '',
-                    'ylo': self.timeframe[0] or '',
-                    'yhi': self.timeframe[1] or '',
-                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS }
+        urlargs = {'words': self.words or '',
+                   'words_some': self.words_some or '',
+                   'words_none': self.words_none or '',
+                   'phrase': self.phrase or '',
+                   'scope': 'title' if self.scope_title else 'any',
+                   'authors': self.author or '',
+                   'pub': self.pub or '',
+                   'ylo': self.timeframe[0] or '',
+                   'yhi': self.timeframe[1] or '',
+                   'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(str(val))
@@ -740,7 +783,7 @@ class ScholarQuerier(object):
         urlargs = {'scisig': tag['value'],
                    'num': settings.per_page_results,
                    'scis': 'no',
-                   'scisf': '' }
+                   'scisf': ''}
 
         if settings.citform != 0:
             urlargs['scis'] = 'yes'
@@ -840,7 +883,7 @@ class ScholarQuerier(object):
 
             ScholarUtils.log('debug', log_msg)
             ScholarUtils.log('debug', '>>>>' + '-'*68)
-            ScholarUtils.log('debug', 'url: %s' % hdl.geturl())            
+            ScholarUtils.log('debug', 'url: %s' % hdl.geturl())
             ScholarUtils.log('debug', 'result: %s' % hdl.getcode())
             ScholarUtils.log('debug', 'headers:\n' + str(hdl.info()))
             ScholarUtils.log('debug', 'data:\n' + html)
@@ -855,7 +898,7 @@ class ScholarQuerier(object):
 def txt(querier):
     articles = querier.articles
     for art in articles:
-        print(art.as_txt() + '\n')
+        print(encode(art.as_txt()) + '\n')
 
 def csv(querier, header=False, sep='|'):
     articles = querier.articles
@@ -959,7 +1002,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     if options.cluster_id is not None:
         if options.author or options.allw or options.some or options.none \
            or options.phrase or options.title_only or options.pub \
-           or options.after or options.before:            
+           or options.after or options.before:
             print 'Cluster ID queries do not allow additional search arguments.'
             return 1
 
