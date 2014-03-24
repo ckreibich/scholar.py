@@ -212,9 +212,9 @@ class ScholarArticle(object):
             'num_citations': [0,    'Citations',      3],
             'num_versions':  [0,    'Versions',       4],
             'cluster_id':    [None, 'Cluster ID',     5],
-            'url_pdf':       [None, 'PDF link',       5],
-            'url_citations': [None, 'Citations list', 6],
-            'url_versions':  [None, 'Versions list',  7],
+            'url_pdf':       [None, 'PDF link',       6],
+            'url_citations': [None, 'Citations list', 7],
+            'url_versions':  [None, 'Versions list',  8],
             'url_citation':  [None, 'Citation link',  9],
         }
 
