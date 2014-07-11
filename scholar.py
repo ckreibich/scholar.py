@@ -1055,11 +1055,17 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
             query.set_timeframe(options.after, options.before)
 
     if options.count is not None:
+        num_results = options.count
         options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
         query.set_num_page_results(options.count)
+    else:
+        num_results = float('inf')
 
     index = 0
     while True:
+        if index + ScholarConf.MAX_PAGE_RESULTS > num_results:
+            query.set_num_page_results(num_results - index)
+
         query.set_start(index)
 
         querier.send_query(query)
