@@ -114,6 +114,7 @@ import optparse
 import os
 import sys
 import re
+import json
 
 try:
     # Try importing for Python 3
@@ -273,6 +274,18 @@ class ScholarArticle(object):
         citation export format. (See ScholarSettings.)
         """
         return self.citation_data or ''
+
+    def as_json(self):
+        """
+        Report the article in JSON format.  Attributes that have a value of
+        None are retained.
+        """
+        json_dict = {}
+        for attribute, attr_data in self.attrs.iteritems():
+            value, label, index = attr_data
+            json_dict[label] = value
+        return json.dumps(json_dict)
+
 
 
 class ScholarArticleParser(object):
@@ -907,6 +920,11 @@ def csv(querier, header=False, sep='|'):
         print(encode(result))
         header = False
 
+def get_json(querier):
+    for article in querier.articles:
+        result = article.as_json()
+        print(encode(result))
+
 def citation_export(querier):
     articles = querier.articles
     for art in articles:
@@ -965,6 +983,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Print article data in CSV form (separator is "|")')
     group.add_option('--csv-header', action='store_true',
                      help='Like --csv, but print header with column names')
+    group.add_option('--json', action='store_true',
+                     help='Print a JSON object with article data')
     group.add_option('--citation', metavar='FORMAT', default=None,
                      help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
     parser.add_option_group(group)
@@ -1054,6 +1074,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         csv(querier)
     elif options.csv_header:
         csv(querier, header=True)
+    elif options.json:
+        get_json(querier)
     elif options.citation is not None:
         citation_export(querier)
     else:
