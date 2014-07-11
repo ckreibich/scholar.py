@@ -589,7 +589,7 @@ class SearchScholarQuery(ScholarQuery):
         self.author = None 
         self.pub = None
         self.timeframe = [None, None]
-        self.start = 0
+        self.start_index = 0
 
     def set_words(self, words):
         """Sets words that *all* must be found in the result."""
@@ -614,12 +614,12 @@ class SearchScholarQuery(ScholarQuery):
         """
         self.scope_title = title_only
 
-    def set_start(self, start_index):
+    def set_start_index(self, start_index):
         """
         Sets the start index of the query.  Usually, this would be a multiple
         of the size of the search result (probably 10 or 20).
         """
-        self.start = start_index
+        self.start_index = start_index
 
     def set_author(self, author):
         """Sets names that must be on the result's author list."""
@@ -657,7 +657,7 @@ class SearchScholarQuery(ScholarQuery):
                    'ylo': self.timeframe[0] or '',
                    'yhi': self.timeframe[1] or '',
                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS,
-                   'start': self.start}
+                   'start': self.start_index}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(str(val))
@@ -1066,7 +1066,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         if index + ScholarConf.MAX_PAGE_RESULTS > num_results:
             query.set_num_page_results(num_results - index)
 
-        query.set_start(index)
+        query.set_start_index(index)
 
         querier.send_query(query)
 
