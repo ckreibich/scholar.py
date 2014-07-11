@@ -1079,10 +1079,10 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         else:
             txt(querier)
 
-        if len(querier.articles) < 20:
+        if len(querier.articles) < ScholarConf.MAX_PAGE_RESULTS:
             # we've reached the end of the list
             break
-        index += 20
+        index += ScholarConf.MAX_PAGE_RESULTS
 
     if options.cookie_file:
         querier.save_cookies()
