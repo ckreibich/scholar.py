@@ -266,6 +266,20 @@ class ScholarArticle(object):
         res.append(sep.join([unicode(self.attrs[key][0]) for key in keys]))
         return '\n'.join(res)
 
+    def as_gfm(self):
+        # Get items sorted in specified order:
+        items = sorted(list(self.attrs.values()), key=lambda item: item[2])
+        # Find largest label and value length:
+        max_label_len = max([len(str(item[1])) for item in items])
+        max_value_len = max([len(str(item[0])) for item in items])
+        fmt = '| {0:<%d} | {1:<%d} |' % (max_label_len, max_value_len)
+        res = [fmt.format(items[0][1], items[0][0])]        # Title as header
+        res.append(fmt.format('-' * max_label_len, '-' * max_value_len))
+        for item in items[1:]:                              # Skip Title
+            if item[0] is not None:
+                res.append(fmt.format(item[1], item[0]))
+        return '\n'.join(res)
+
     def as_citation(self):
         """
         Reports the article in a standard citation format. This works only
@@ -907,6 +921,11 @@ def csv(querier, header=False, sep='|'):
         print(encode(result))
         header = False
 
+def gfm(querier):
+    articles = querier.articles
+    for art in articles:
+        print(encode(art.as_gfm()) + '\n')
+
 def citation_export(querier):
     articles = querier.articles
     for art in articles:
@@ -965,6 +984,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Print article data in CSV form (separator is "|")')
     group.add_option('--csv-header', action='store_true',
                      help='Like --csv, but print header with column names')
+    group.add_option('--gfm', action='store_true',
+                     help='Print article data in Github Flavored Markdown table format')
     group.add_option('--citation', metavar='FORMAT', default=None,
                      help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
     parser.add_option_group(group)
@@ -1054,6 +1075,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         csv(querier)
     elif options.csv_header:
         csv(querier, header=True)
+    elif options.gfm:
+        gfm(querier)
     elif options.citation is not None:
         citation_export(querier)
     else:
