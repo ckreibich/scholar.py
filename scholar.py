@@ -266,6 +266,21 @@ class ScholarArticle(object):
         res.append(sep.join([unicode(self.attrs[key][0]) for key in keys]))
         return '\n'.join(res)
 
+    def as_html(self):
+        # Get items sorted in specified order:
+        items = sorted(list(self.attrs.values()), key=lambda item: item[2])
+        fmt = ('\t<tr>\n' +
+               '\t\t<{0}>{1}</{0}>\n' +
+               '\t\t<{0}>{2}</{0}>\n' +
+               '\t</tr>')
+        res = ['<table>',
+               fmt.format('th', items[0][1], items[0][0])]  # Title as header
+        for item in items[1:]:                              # Skip Title
+            if item[0] is not None:
+                res.append(fmt.format('td', item[1], item[0]))
+        res.append('</table>')
+        return '\n'.join(res)
+
     def as_citation(self):
         """
         Reports the article in a standard citation format. This works only
@@ -907,6 +922,11 @@ def csv(querier, header=False, sep='|'):
         print(encode(result))
         header = False
 
+def html(querier):
+    articles = querier.articles
+    for art in articles:
+        print(encode(art.as_html()) + '\n')
+
 def citation_export(querier):
     articles = querier.articles
     for art in articles:
@@ -965,6 +985,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Print article data in CSV form (separator is "|")')
     group.add_option('--csv-header', action='store_true',
                      help='Like --csv, but print header with column names')
+    group.add_option('--html', action='store_true',
+                     help='Print article data in html table format')
     group.add_option('--citation', metavar='FORMAT', default=None,
                      help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
     parser.add_option_group(group)
@@ -1054,6 +1076,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         csv(querier)
     elif options.csv_header:
         csv(querier, header=True)
+    elif options.html:
+        html(querier)
     elif options.citation is not None:
         citation_export(querier)
     else:
