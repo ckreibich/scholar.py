@@ -143,7 +143,11 @@ if sys.version_info[0] == 3:
     unicode = str # pylint: disable-msg=W0622
     encode = lambda s: s # pylint: disable-msg=C0103
 else:
-    encode = lambda s: s.encode('utf-8') # pylint: disable-msg=C0103
+    def encode(s):
+        if isinstance(s, (int, long, float, complex)):
+            return str(s)
+        else:
+            return s.encode('utf-8') # pylint: disable-msg=C0103
 
 
 class Error(Exception):
@@ -556,7 +560,7 @@ class ClusterScholarQuery(ScholarQuery):
                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
 
         for key, val in urlargs.items():
-            urlargs[key] = quote(str(val))
+            urlargs[key] = quote(encode(val))
 
         return self.SCHOLAR_CLUSTER_URL % urlargs
 
@@ -650,7 +654,7 @@ class SearchScholarQuery(ScholarQuery):
                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
 
         for key, val in urlargs.items():
-            urlargs[key] = quote(str(val))
+            urlargs[key] = quote(encode(val))
 
         return self.SCHOLAR_QUERY_URL % urlargs
 
