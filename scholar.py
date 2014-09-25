@@ -216,6 +216,7 @@ class ScholarArticle(object):
             'url_citations': [None, 'Citations list', 7],
             'url_versions':  [None, 'Versions list',  8],
             'url_citation':  [None, 'Citation link',  9],
+            'url_related':   [None, 'Related link',  10],
         }
 
         # The citation data in one of the standard export formats,
@@ -374,6 +375,9 @@ class ScholarArticleParser(object):
 
             if tag.getText().startswith('Import'):
                 self.article['url_citation'] = self._path2url(tag.get('href'))
+
+            if tag.getText().startswith('Related'):
+                self.article['url_related'] = self._path2url(tag.get('href'))
 
 
     @staticmethod
