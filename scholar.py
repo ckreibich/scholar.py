@@ -7,6 +7,20 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.5:  Usage as python package, parse authors and published_in also:
+#
+#    from scholar import scholar
+#
+#    #python scholar.py -c 1 -p "doi: 10.1021/ci500158y" --after 1990
+#    doi = '10.1021/ci500158y'
+#    phrase = '"doi: %s"' % doi  # "exact phrase"
+#    params = ['-c', '1', '-p', phrase, '--after', '1990']
+#
+#    articles = scholar.get_articles(params)
+#
+#    for a in articles:
+#        print a.title ...
+#
 # 2.4:  Bugfixes:
 #
 #       - Correctly handle Unicode characters when reporting results
@@ -131,9 +145,12 @@ except ImportError:
 # Import BeautifulSoup -- try 4 first, fall back to older
 try:
     from bs4 import BeautifulSoup
+    AUTHORS_RE = re.compile(r'(?P<authors>[^.]+?)... .+? (?P<year>[20|19]{2}\d{2}) - (?P<published_in>[^.]+)')
 except ImportError:
     try:
         from BeautifulSoup import BeautifulSoup
+        # '...' is '&hellip;' in BeautifulSoup 3
+        AUTHORS_RE = re.compile(r'(?P<authors>[^.]+?)&hellip; .+? (?P<year>[20|19]{2}\d{2}) - (?P<published_in>[^.]+)')
     except ImportError:
         print('We need BeautifulSoup, sorry...')
         sys.exit(1)
@@ -216,6 +233,8 @@ class ScholarArticle(object):
             'url_citations': [None, 'Citations list', 7],
             'url_versions':  [None, 'Versions list',  8],
             'url_citation':  [None, 'Citation link',  9],
+            'authors':       [None, 'Authors',       10],
+            'published_in':  [None, 'Published in',  11],
         }
 
         # The citation data in one of the standard export formats,
@@ -274,6 +293,11 @@ class ScholarArticle(object):
         """
         return self.citation_data or ''
 
+    def as_object(self):
+        for key, val in self.attrs.items():
+            setattr(self, key, val[0])
+        del(self.attrs)
+        return self
 
 class ScholarArticleParser(object):
     """
@@ -286,6 +310,7 @@ class ScholarArticleParser(object):
         self.article = None
         self.site = site or ScholarConf.SCHOLAR_SITE
         self.year_re = re.compile(r'\b(?:20|19)\d{2}\b')
+        self.authors_re = AUTHORS_RE
 
     def handle_article(self, art):
         """
@@ -498,9 +523,16 @@ class ScholarArticleParser120726(ScholarArticleParser):
                         span.clear()
                     self.article['title'] = ''.join(tag.h3.findAll(text=True))
 
-                if tag.find('div', {'class': 'gs_a'}):
-                    year = self.year_re.findall(tag.find('div', {'class': 'gs_a'}).text)
-                    self.article['year'] = year[0] if len(year) > 0 else None
+                gs_a = tag.find('div', {'class': 'gs_a'})
+                if gs_a:
+                    m = self.authors_re.match(gs_a.text)
+                    if m:
+                        self.article['authors'] = m.group('authors')
+                        self.article['year'] = m.group('year')
+                        self.article['published_in'] = m.group('published_in')
+                    else:
+                        year = self.year_re.findall(gs_a.text)
+                        self.article['year'] = year[0] if len(year) > 0 else None
 
                 if tag.find('div', {'class': 'gs_fl'}):
                     self._parse_links(tag.find('div', {'class': 'gs_fl'}))
@@ -585,7 +617,7 @@ class SearchScholarQuery(ScholarQuery):
         self.words_none = None # None of these words
         self.phrase = None
         self.scope_title = False # If True, search in title only
-        self.author = None 
+        self.author = None
         self.pub = None
         self.timeframe = [None, None]
 
@@ -912,8 +944,16 @@ def citation_export(querier):
     for art in articles:
         print(art.as_citation() + '\n')
 
+def lst(querier):
+    articles = querier.articles
+    if len(articles):
+        for art in articles:
+            art.as_object()
 
-def main():
+    return articles
+
+
+def main(return_lst=False):
     usage = """scholar.py [options] <query string>
 A command-line interface to Google Scholar.
 
@@ -1050,6 +1090,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     querier.send_query(query)
 
+    if return_lst:
+        return lst(querier)
     if options.csv:
         csv(querier)
     elif options.csv_header:
@@ -1063,6 +1105,16 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         querier.save_cookies()
 
     return 0
+
+
+def get_articles(params):
+    initial_argv = sys.argv
+    sys.argv = ['scholar.py'] + params #change sys.argv
+    articles = main(return_lst=True)
+    sys.argv = initial_argv           #restore sys.argv
+
+    return articles
+
 
 if __name__ == "__main__":
     sys.exit(main())

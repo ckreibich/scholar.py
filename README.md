@@ -54,13 +54,13 @@ Note the cluster ID in the above. Using this ID, you can directly access the clu
         Cluster ID 17749203648027613321
           PDF link http://icole.mut-es.ac.ir/downloads/Sci_Sec/W1/Einstein%201917.pdf
     Citations list http://scholar.google.com/scholar?cites=17749203648027613321&as_sdt=2005&sciodt=0,5&hl=en
-    
+
              Title ON THE QUANTUM THEORY OF RADIATION
                URL http://www.informationphilosopher.com/solutions/scientists/einstein/1917_Radiation.pdf
          Citations 0
           Versions 0
           PDF link http://www.informationphilosopher.com/solutions/scientists/einstein/1917_Radiation.pdf
-    
+
              Title The Quantum Theory of Radiation
                URL http://web.ihep.su/dbserv/compas/src/einstein17/eng.pdf
          Citations 0
@@ -80,6 +80,21 @@ Let's retrieve a BibTeX entry for that quantum theory paper. The best BibTeX oft
       year={1917}
     }
 
+
+Usage as Python package
+----------------
+
+    from scholar import scholar
+
+    #python scholar.py -c 1 -p "doi: 10.1021/ci500158y" --after 1990
+    doi = '10.1021/ci500158y'
+    phrase = '"doi: %s"' % doi  # "exact phrase"
+    params = ['-c', '1', '-p', phrase, '--after', '1990']
+
+    articles = scholar.get_articles(params)
+
+    for a in articles:
+        print a.title ...
 
 License
 -------
