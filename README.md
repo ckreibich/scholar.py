@@ -87,6 +87,7 @@ Usage as Python package
     from scholar import scholar
 
     #python scholar.py -c 1 -p "doi: 10.1021/ci500158y" --after 1990
+    doi = '10.1021/ci500158y'
     phrase = '"doi: %s"' % doi  # "exact phrase"
     params = ['-c', '1', '-p', phrase, '--after', '1990']
 
