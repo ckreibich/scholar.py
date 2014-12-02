@@ -12,6 +12,7 @@ Features
 --------
 
 * Extracts publication title, most relevant web link, PDF link, number of citations, number of online versions, link to Google Scholar's article cluster for the work, Google Scholar's cluster of all works referencing the publication.
+* Extracts total number of hits as reported by Scholar (new in version 2.5)
 * Supports the full range of advanced query options provided by Google Scholar, such as title-only search or publication date timeframes.
 * Supports article cluster IDs, i.e., information relating to the variants of an article already identified by Google Scholar
 * Supports retrieval of citation details in standard external formats as provided by Google Scholar, including BibTeX and EndNote.
@@ -26,8 +27,8 @@ API, but I will never add features that intentionally try to work
 around the query limits imposed by Google Scholar. Please don't ask me
 to add such features.
 
-Example
--------
+Examples
+--------
 
 Try scholar.py --help for all available options. Note, the command line arguments changed considerably in version 2.0! A few examples:
 
@@ -79,6 +80,11 @@ Let's retrieve a BibTeX entry for that quantum theory paper. The best BibTeX oft
       pages={121--128},
       year={1917}
     }
+
+Report the total number of articles Google Scholar has for Einstein:
+
+    $ scholar.py --txt-globals --author "albert einstein" | grep '\[G\]' | grep Results
+    [G]    Results 4190
 
 
 License

@@ -7,6 +7,30 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.5:  Ability to parse global result attributes. This right now means
+#       only the total number of results as reported by Scholar at the
+#       top of the results pages (e.g. "About 31 results"). Such
+#       global result attributes end up in the new attrs member of the
+#       used ScholarQuery class. To render those attributes, you need
+#       to use the new --txt-globals flag.
+#
+#       Rendering global results is currently not supported for CSV
+#       (as they don't fit the one-line-per-article pattern). For
+#       grepping, you can separate the global results from the
+#       per-article ones by looking for a line prefix of "[G]":
+#
+#       $ scholar.py --txt-globals -a "Einstein"
+#       [G]    Results 11900
+#
+#                Title Can quantum-mechanical description of physical reality be considered complete?
+#                  URL http://journals.aps.org/pr/abstract/10.1103/PhysRev.47.777
+#                 Year 1935
+#            Citations 12804
+#             Versions 80
+#              Cluster ID 8174092782678430881
+#       Citations list http://scholar.google.com/scholar?cites=8174092782678430881&as_sdt=2005&sciodt=0,5&hl=en
+#        Versions list http://scholar.google.com/scholar?cluster=8174092782678430881&hl=en&as_sdt=0,5
+#
 # 2.4:  Bugfixes:
 #
 #       - Correctly handle Unicode characters when reporting results
@@ -161,7 +185,7 @@ class QueryArgumentError(Error):
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.4'
+    VERSION = '2.5'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 20 # Current maximum for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
@@ -205,6 +229,9 @@ class ScholarArticle(object):
     provides basic dictionary-like behavior.
     """
     def __init__(self):
+        # The triplets for each keyword correspond to (1) the actual
+        # value, (2) a user-suitable label for the item, and (3) an
+        # ordering index:
         self.attrs = {
             'title':         [None, 'Title',          0],
             'url':           [None, 'URL',            1],
@@ -293,6 +320,13 @@ class ScholarArticleParser(object):
         successfully.  In this base class, the callback does nothing.
         """
 
+    def handle_num_results(self, num_results):
+        """
+        The parser invokes this callback if it determines the overall
+        number of results, as reported on the parsed results page. The
+        base class implementation does nothing.
+        """
+
     def parse(self, html):
         """
         This method initiates parsing of HTML content, cleans resulting
@@ -300,7 +334,12 @@ class ScholarArticleParser(object):
         resulting instances via the handle_article callback.
         """
         self.soup = BeautifulSoup(html)
-        for div in self.soup.findAll(ScholarArticleParser._tag_checker):
+
+        # This parses any global, non-itemized attributes from the page.
+        self._parse_globals()
+
+        # Now parse out listed articles:
+        for div in self.soup.findAll(ScholarArticleParser._tag_results_checker):
             self._parse_article(div)
             self._clean_article()
             if self.article['title']:
@@ -314,6 +353,23 @@ class ScholarArticleParser(object):
         """
         if self.article['title']:
             self.article['title'] = self.article['title'].strip()
+
+    def _parse_globals(self):
+        tag = self.soup.find(name='div', attrs={'id': 'gs_ab_md'})
+        if tag is not None:
+            raw_text = tag.findAll(text=True)
+            # raw text is a list because the body contains <b> etc
+            if raw_text is not None and len(raw_text) > 0:
+                try:
+                    num_results = raw_text[0].split()[1]
+                    # num_results may now contain commas to separate
+                    # thousands, strip:
+                    num_results = num_results.replace(',', '')
+                    num_results = int(num_results)
+                    self.handle_num_results(num_results)
+                except (IndexError, ValueError):
+                    pass
+
 
     def _parse_article(self, div):
         self.article = ScholarArticle()
@@ -378,7 +434,6 @@ class ScholarArticleParser(object):
 
     @staticmethod
     def _tag_has_class(tag, klass):
-
         """
         This predicate function checks whether a BeatifulSoup Tag instance
         has a class attribute.
@@ -391,7 +446,7 @@ class ScholarArticleParser(object):
         return klass in res
 
     @staticmethod
-    def _tag_checker(tag):
+    def _tag_results_checker(tag):
         return tag.name == 'div' \
             and ScholarArticleParser._tag_has_class(tag, 'gs_r')
 
@@ -512,7 +567,17 @@ class ScholarQuery(object):
     """
     def __init__(self):
         self.url = None
+
+        # The number of results requested from Scholar -- not the
+        # total number of results it reports (the latter gets stored
+        # in attrs, see below).
         self.num_results = ScholarConf.MAX_PAGE_RESULTS
+
+        # Queries may have global result attributes, similar to
+        # per-article attributes in ScholarArticle. The exact set of
+        # attributes may differ by query type, but they all share the
+        # basic data structure:
+        self.attrs = {}
 
     def set_num_page_results(self, num_page_results):
         msg = 'maximum number of results on page must be numeric'
@@ -526,6 +591,29 @@ class ScholarQuery(object):
         """
         return None
 
+    def _add_attribute_type(self, key, label, default_value=None):
+        """
+        Adds a new type of attribute to the list of attributes
+        understood by this query. Meant to be used by the constructors
+        in derived classes.
+        """
+        if len(self.attrs) == 0:
+            self.attrs[key] = [default_value, label, 0]
+            return
+        idx = max([item[2] for item in self.attrs.values()]) + 1
+        self.attrs[key] = [default_value, label, idx]
+
+    def __getitem__(self, key):
+        """Getter for attribute value. Returns None if no such key."""
+        if key in self.attrs:
+            return self.attrs[key][0]
+        return None
+
+    def __setitem__(self, key, item):
+        """Setter for attribute value. Does nothing if no such key."""
+        if key in self.attrs:
+            self.attrs[key][0] = item
+
 
 class ClusterScholarQuery(ScholarQuery):
     """
@@ -538,6 +626,7 @@ class ClusterScholarQuery(ScholarQuery):
 
     def __init__(self, cluster=None):
         ScholarQuery.__init__(self)
+        self._add_attribute_type('num_results', 'Results', 0)
         self.cluster = None
         self.set_cluster(cluster)
 
@@ -580,6 +669,7 @@ class SearchScholarQuery(ScholarQuery):
 
     def __init__(self):
         ScholarQuery.__init__(self)
+        self._add_attribute_type('num_results', 'Results', 0)
         self.words = None # The default search behavior
         self.words_some = None # At least one of those words
         self.words_none = None # None of these words
@@ -723,6 +813,10 @@ class ScholarQuerier(object):
         def __init__(self, querier):
             ScholarArticleParser120726.__init__(self)
             self.querier = querier
+
+        def handle_num_results(self, num_results):
+            if self.querier is not None and self.querier.query is not None:
+                self.querier.query['num_results'] = num_results
 
         def handle_article(self, art):
             self.querier.add_article(art)
@@ -895,7 +989,27 @@ class ScholarQuerier(object):
             return None
 
 
-def txt(querier):
+def txt(querier, with_globals):
+    if with_globals:
+        # If we have any articles, check their attribute labels to get
+        # the maximum length -- makes for nicer alignment.
+        max_label_len = 0
+        if len(querier.articles) > 0:
+            items = sorted(list(querier.articles[0].attrs.values()),
+                           key=lambda item: item[2])
+            max_label_len = max([len(str(item[1])) for item in items])
+
+        # Get items sorted in specified order:
+        items = sorted(list(querier.query.attrs.values()), key=lambda item: item[2])
+        # Find largest label length:
+        max_label_len = max([len(str(item[1])) for item in items] + [max_label_len])
+        fmt = '[G] %%%ds %%s' % max(0, max_label_len-4)
+        for item in items:
+            if item[0] is not None:
+                print fmt % (item[1], item[0])
+        if len(items) > 0:
+            print
+
     articles = querier.articles
     for art in articles:
         print(encode(art.as_txt()) + '\n')
@@ -961,6 +1075,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                                  'These options control the appearance of the results.')
     group.add_option('--txt', action='store_true',
                      help='Print article data in text format (default)')
+    group.add_option('--txt-globals', action='store_true',
+                     help='Like --txt, but first print global results too')
     group.add_option('--csv', action='store_true',
                      help='Print article data in CSV form (separator is "|")')
     group.add_option('--csv-header', action='store_true',
@@ -1057,7 +1173,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     elif options.citation is not None:
         citation_export(querier)
     else:
-        txt(querier)
+        txt(querier, with_globals=options.txt_globals)
 
     if options.cookie_file:
         querier.save_cookies()
