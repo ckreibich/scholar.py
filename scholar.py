@@ -497,7 +497,11 @@ class ScholarArticleParser120201(ScholarArticleParser):
 
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_a'):
                 year = self.year_re.findall(tag.text)
-                self.article['year'] = year[0] if len(year) > 0 else None
+                
+                if len(year) > 0: 
+                    self.article['year'] = year[0] 
+                else:
+                    None
 
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_fl'):
                 self._parse_links(tag)
@@ -555,7 +559,11 @@ class ScholarArticleParser120726(ScholarArticleParser):
 
                 if tag.find('div', {'class': 'gs_a'}):
                     year = self.year_re.findall(tag.find('div', {'class': 'gs_a'}).text)
-                    self.article['year'] = year[0] if len(year) > 0 else None
+
+                    if len(year) > 0:
+                        self.article['year'] = year[0]
+                    else:
+                        None
 
                 if tag.find('div', {'class': 'gs_fl'}):
                     self._parse_links(tag.find('div', {'class': 'gs_fl'}))
@@ -728,11 +736,16 @@ class SearchScholarQuery(ScholarQuery):
            and self.timeframe[0] is None and self.timeframe[1] is None:
             raise QueryArgumentError('search query needs more parameters')
 
+        if self.scope_title:
+            scope = 'title'
+        else:
+            scope = 'any'
+
         urlargs = {'words': self.words or '',
                    'words_some': self.words_some or '',
                    'words_none': self.words_none or '',
                    'phrase': self.phrase or '',
-                   'scope': 'title' if self.scope_title else 'any',
+                   'scope': scope,
                    'authors': self.author or '',
                    'pub': self.pub or '',
                    'ylo': self.timeframe[0] or '',
@@ -833,7 +846,7 @@ class ScholarQuerier(object):
                 self.cjar.load(ScholarConf.COOKIE_JAR_FILE,
                                ignore_discard=True)
                 ScholarUtils.log('info', 'loaded cookies file')
-            except Exception as msg:
+            except Exception,msg:
                 ScholarUtils.log('warn', 'could not load cookies file: %s' % msg)
                 self.cjar = MozillaCookieJar() # Just to be safe
 
@@ -904,6 +917,7 @@ class ScholarQuerier(object):
                                        log_msg='dump of query response HTML',
                                        err_msg='results retrieval failed')
         if html is None:
+            ScholarUtils.log('info', 'Scholar.py was unable to reach Google Scholar')
             return
 
         self.parse(html)
@@ -956,7 +970,7 @@ class ScholarQuerier(object):
                            ignore_discard=True)
             ScholarUtils.log('info', 'saved cookies file')
             return True
-        except Exception as msg:
+        except Exception,msg:
             ScholarUtils.log('warn', 'could not save cookies file: %s' % msg)
             return False
 
@@ -984,7 +998,7 @@ class ScholarQuerier(object):
             ScholarUtils.log('debug', '<<<<' + '-'*68)
 
             return html
-        except Exception as err:
+        except Exception,err:
             ScholarUtils.log('info', err_msg + ': %s' % err)
             return None
 
