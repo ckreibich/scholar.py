@@ -13,7 +13,7 @@ Features
 
 * Extracts publication title, most relevant web link, PDF link, number of citations, number of online versions, link to Google Scholar's article cluster for the work, Google Scholar's cluster of all works referencing the publication.
 * Extracts total number of hits as reported by Scholar (new in version 2.5)
-* Supports the full range of advanced query options provided by Google Scholar, such as title-only search or publication date timeframes.
+* Supports the full range of advanced query options provided by Google Scholar, such as title-only search, publication date timeframes, and inclusion/exclusion of patents and citations.
 * Supports article cluster IDs, i.e., information relating to the variants of an article already identified by Google Scholar
 * Supports retrieval of citation details in standard external formats as provided by Google Scholar, including BibTeX and EndNote.
 * Command-line tool prints entries in CSV format, simple plain text, or in the citation export format.

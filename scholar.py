@@ -7,6 +7,12 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.6   Ability to disable inclusion of patents and citations. This
+#       has the same effect as unchecking the two patents/citations
+#       checkboxes in the Scholar UI, which are checked by default.
+#       Accordingly, the command-line options are --no-patents and
+#       --no-citations.
+#
 # 2.5:  Ability to parse global result attributes. This right now means
 #       only the total number of results as reported by Scholar at the
 #       top of the results pages (e.g. "About 31 results"). Such
@@ -185,7 +191,7 @@ class QueryArgumentError(Error):
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.5'
+    VERSION = '2.6'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 20 # Current maximum for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
@@ -665,7 +671,10 @@ class SearchScholarQuery(ScholarQuery):
         + '&as_publication=%(pub)s' \
         + '&as_ylo=%(ylo)s' \
         + '&as_yhi=%(yhi)s' \
-        + '&btnG=&hl=en&as_sdt=0,5&num=%(num)s'
+        + '&as_sdt=%(patents)s,5' \
+        + '&as_vis=%(citations)s' \
+        + '&btnG=&hl=en' \
+        + '&num=%(num)s'
 
     def __init__(self):
         ScholarQuery.__init__(self)
@@ -678,6 +687,8 @@ class SearchScholarQuery(ScholarQuery):
         self.author = None 
         self.pub = None
         self.timeframe = [None, None]
+        self.include_patents = True
+        self.include_citations = True
 
     def set_words(self, words):
         """Sets words that *all* must be found in the result."""
@@ -721,6 +732,12 @@ class SearchScholarQuery(ScholarQuery):
             end = ScholarUtils.ensure_int(end)
         self.timeframe = [start, end]
 
+    def set_include_citations(self, yesorno):
+        self.include_citations = yesorno
+
+    def set_include_patents(self, yesorno):
+        self.include_patents = yesorno
+
     def get_url(self):
         if self.words is None and self.words_some is None \
            and self.words_none is None and self.phrase is None \
@@ -737,6 +754,8 @@ class SearchScholarQuery(ScholarQuery):
                    'pub': self.pub or '',
                    'ylo': self.timeframe[0] or '',
                    'yhi': self.timeframe[1] or '',
+                   'patents': '0' if self.include_patents else '1',
+                   'citations': '0' if self.include_citations else '1',
                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
 
         for key, val in urlargs.items():
@@ -1065,6 +1084,10 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Results must have appeared in or after given year')
     group.add_option('--before', metavar='YEAR', default=None,
                      help='Results must have appeared in or before given year')
+    group.add_option('--no-patents', action='store_true', default=False,
+                     help='Do not include patents in results')
+    group.add_option('--no-citations', action='store_true', default=False,
+                     help='Do not include citations in results')
     group.add_option('-C', '--cluster-id', metavar='CLUSTER_ID', default=None,
                      help='Do not search, just use articles in given cluster ID')
     group.add_option('-c', '--count', type='int', default=None,
@@ -1159,6 +1182,10 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
             query.set_pub(options.pub)
         if options.after or options.before:
             query.set_timeframe(options.after, options.before)
+        if options.no_patents:
+            query.set_include_patents(False)
+        if options.no_citations:
+            query.set_include_citations(False)
 
     if options.count is not None:
         options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
