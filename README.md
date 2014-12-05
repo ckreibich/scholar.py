@@ -11,7 +11,7 @@ Christian
 Features
 --------
 
-* Extracts publication title, most relevant web link, PDF link, number of citations, number of online versions, link to Google Scholar's article cluster for the work, Google Scholar's cluster of all works referencing the publication.
+* Extracts publication title, most relevant web link, PDF link, number of citations, number of online versions, link to Google Scholar's article cluster for the work, Google Scholar's cluster of all works referencing the publication, and excerpt of content.
 * Extracts total number of hits as reported by Scholar (new in version 2.5)
 * Supports the full range of advanced query options provided by Google Scholar, such as title-only search, publication date timeframes, and inclusion/exclusion of patents and citations.
 * Supports article cluster IDs, i.e., information relating to the variants of an article already identified by Google Scholar
@@ -44,6 +44,8 @@ Retrieve one article written by Einstein on quantum theory:
           PDF link http://icole.mut-es.ac.ir/downloads/Sci_Sec/W1/Einstein%201917.pdf
     Citations list http://scholar.google.com/scholar?cites=17749203648027613321&as_sdt=2005&sciodt=0,5&hl=en
      Versions list http://scholar.google.com/scholar?cluster=17749203648027613321&hl=en&as_sdt=0,5
+           Excerpt The formal similarity between the chromatic distribution curve for thermal radiation [...]
+
 
 Note the cluster ID in the above. Using this ID, you can directly access the cluster of articles Google Scholar has already determined to be variants of the same paper. So, let's see the versions:
 
@@ -55,18 +57,21 @@ Note the cluster ID in the above. Using this ID, you can directly access the clu
         Cluster ID 17749203648027613321
           PDF link http://icole.mut-es.ac.ir/downloads/Sci_Sec/W1/Einstein%201917.pdf
     Citations list http://scholar.google.com/scholar?cites=17749203648027613321&as_sdt=2005&sciodt=0,5&hl=en
-    
+           Excerpt The formal similarity between the chromatic distribution curve for thermal radiation [...]
+
              Title ON THE QUANTUM THEORY OF RADIATION
                URL http://www.informationphilosopher.com/solutions/scientists/einstein/1917_Radiation.pdf
          Citations 0
           Versions 0
           PDF link http://www.informationphilosopher.com/solutions/scientists/einstein/1917_Radiation.pdf
+           Excerpt The formal similarity between the chromatic distribution curve for thermal radiation [...]
     
              Title The Quantum Theory of Radiation
                URL http://web.ihep.su/dbserv/compas/src/einstein17/eng.pdf
          Citations 0
           Versions 0
           PDF link http://web.ihep.su/dbserv/compas/src/einstein17/eng.pdf
+           Excerpt 1 on the assumption that there are discrete elements of energy, from which quantum [...]
 
 
 Let's retrieve a BibTeX entry for that quantum theory paper. The best BibTeX often seems to be the one linked from search results, not those in the article cluster, so let's do a search again:

@@ -7,6 +7,11 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.7   Ability to extract content excerpts as reported in search results.
+#       Also a fix to -s|--some and -n|--none: these did not yet support
+#       passing lists of phrases. This now works correctly if you provide
+#       separate phrases via commas.
+#
 # 2.6   Ability to disable inclusion of patents and citations. This
 #       has the same effect as unchecking the two patents/citations
 #       checkboxes in the Scholar UI, which are checked by default.
@@ -191,7 +196,7 @@ class QueryArgumentError(Error):
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.6'
+    VERSION = '2.7'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 20 # Current maximum for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
@@ -249,6 +254,7 @@ class ScholarArticle(object):
             'url_citations': [None, 'Citations list', 7],
             'url_versions':  [None, 'Versions list',  8],
             'url_citation':  [None, 'Citation link',  9],
+            'excerpt':       [None, 'Excerpt',       10],
         }
 
         # The citation data in one of the standard export formats,
@@ -375,7 +381,6 @@ class ScholarArticleParser(object):
                     self.handle_num_results(num_results)
                 except (IndexError, ValueError):
                     pass
-
 
     def _parse_article(self, div):
         self.article = ScholarArticle()
@@ -566,6 +571,14 @@ class ScholarArticleParser120726(ScholarArticleParser):
                 if tag.find('div', {'class': 'gs_fl'}):
                     self._parse_links(tag.find('div', {'class': 'gs_fl'}))
 
+                if tag.find('div', {'class': 'gs_rs'}):
+                    # These are the content excerpts rendered into the results.
+                    raw_text = tag.find('div', {'class': 'gs_rs'}).findAll(text=True)
+                    if len(raw_text) > 0:
+                        raw_text = ''.join(raw_text)
+                        raw_text = raw_text.replace('\n', '')
+                        self.article['excerpt'] = raw_text
+
 
 class ScholarQuery(object):
     """
@@ -671,7 +684,7 @@ class SearchScholarQuery(ScholarQuery):
         + '&as_publication=%(pub)s' \
         + '&as_ylo=%(ylo)s' \
         + '&as_yhi=%(yhi)s' \
-        + '&as_sdt=%(patents)s,5' \
+        + '&as_sdt=%(patents)s%%2C5' \
         + '&as_vis=%(citations)s' \
         + '&btnG=&hl=en' \
         + '&num=%(num)s'
@@ -745,9 +758,30 @@ class SearchScholarQuery(ScholarQuery):
            and self.timeframe[0] is None and self.timeframe[1] is None:
             raise QueryArgumentError('search query needs more parameters')
 
+        # If we have some-words or none-words lists, we need to
+        # process them so GS understands them. For simple
+        # space-separeted word lists, there's nothing to do. For lists
+        # of phrases we have to ensure quotations around the phrases,
+        # separating them by whitespace.
+        words_some = None
+        words_none = None
+
+        if self.words_some:
+            if self.words_some.find(',') >= 0:
+                phrases = self.words_some.split(',')
+                words_some = ' '.join(['"' + phrase.strip() + '"' for phrase in phrases])
+            else:
+                words_some = self.words_some
+        if self.words_none:
+            if self.words_none.find(',') >= 0:
+                phrases = self.words_none.split(',')
+                words_none = ' '.join(['"' + phrase.strip() + '"' for phrase in phrases])
+            else:
+                words_none = self.words_none
+
         urlargs = {'words': self.words or '',
-                   'words_some': self.words_some or '',
-                   'words_none': self.words_none or '',
+                   'words_some': words_some or '',
+                   'words_none': words_none or '',
                    'phrase': self.phrase or '',
                    'scope': 'title' if self.scope_title else 'any',
                    'authors': self.author or '',
@@ -1071,9 +1105,9 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     group.add_option('-A', '--all', metavar='WORDS', default=None, dest='allw',
                      help='Results must contain all of these words')
     group.add_option('-s', '--some', metavar='WORDS', default=None,
-                     help='Results must contain at least one of these words')
+                     help='Results must contain at least one of these words. Pass arguments in form -s "foo bar baz" for simple words, and -s "a phrase, another phrase" for phrases')
     group.add_option('-n', '--none', metavar='WORDS', default=None,
-                     help='Results must contain none of these words')
+                     help='Results must contain none of these words. See -s|--some re. formatting')
     group.add_option('-p', '--phrase', metavar='PHRASE', default=None,
                      help='Results must contain exact phrase')
     group.add_option('-t', '--title-only', action='store_true', default=False,
