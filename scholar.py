@@ -159,7 +159,7 @@ try:
     # pylint: disable-msg=F0401
     # pylint: disable-msg=E0611
     from urllib.request import HTTPCookieProcessor, Request, build_opener
-    from urllib.parse import quote
+    from urllib.parse import quote, unquote
     from http.cookiejar import MozillaCookieJar
 except ImportError:
     # Fallback for Python 2
