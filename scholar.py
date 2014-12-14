@@ -1053,7 +1053,7 @@ class ScholarQuerier(object):
             ScholarUtils.log('debug', 'url: %s' % hdl.geturl())
             ScholarUtils.log('debug', 'result: %s' % hdl.getcode())
             ScholarUtils.log('debug', 'headers:\n' + str(hdl.info()))
-            ScholarUtils.log('debug', 'data:\n' + html)
+            ScholarUtils.log('debug', 'data:\n' + html.decode('utf-8')) # For Python 3
             ScholarUtils.log('debug', '<<<<' + '-'*68)
 
             return html
@@ -1079,7 +1079,7 @@ def txt(querier, with_globals):
         fmt = '[G] %%%ds %%s' % max(0, max_label_len-4)
         for item in items:
             if item[0] is not None:
-                print fmt % (item[1], item[0])
+                print(fmt % (item[1], item[0]))
         if len(items) > 0:
             print
 
@@ -1184,7 +1184,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         ScholarUtils.log('info', 'using log level %d' % ScholarConf.LOG_LEVEL)
 
     if options.version:
-        print 'This is scholar.py %s.' % ScholarConf.VERSION
+        print('This is scholar.py %s.' % ScholarConf.VERSION)
         return 0
 
     if options.cookie_file:
@@ -1196,7 +1196,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         if options.author or options.allw or options.some or options.none \
            or options.phrase or options.title_only or options.pub \
            or options.after or options.before:
-            print 'Cluster ID queries do not allow additional search arguments.'
+            print('Cluster ID queries do not allow additional search arguments.')
             return 1
 
     querier = ScholarQuerier()
@@ -1211,7 +1211,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     elif options.citation == 'rw':
         settings.set_citation_format(ScholarSettings.CITFORM_REFWORKS)
     elif options.citation is not None:
-        print 'Invalid citation link format, must be one of "bt", "en", "rm", or "rw".'
+        print('Invalid citation link format, must be one of "bt", "en", "rm", or "rw".')
         return 1
 
     querier.apply_settings(settings)
