@@ -7,6 +7,10 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.8   Improved quotation-mark handling for multi-word phrases in
+#       queries. Also, log URLs %-decoded in debugging output, for
+#       easier interpretation.
+#
 # 2.7   Ability to extract content excerpts as reported in search results.
 #       Also a fix to -s|--some and -n|--none: these did not yet support
 #       passing lists of phrases. This now works correctly if you provide
@@ -160,7 +164,7 @@ try:
 except ImportError:
     # Fallback for Python 2
     from urllib2 import Request, build_opener, HTTPCookieProcessor
-    from urllib import quote
+    from urllib import quote, unquote
     from cookielib import MozillaCookieJar
 
 # Import BeautifulSoup -- try 4 first, fall back to older
@@ -196,7 +200,7 @@ class QueryArgumentError(Error):
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.7'
+    VERSION = '2.8'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 20 # Current maximum for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
@@ -633,6 +637,30 @@ class ScholarQuery(object):
         if key in self.attrs:
             self.attrs[key][0] = item
 
+    def _parenthesize_phrases(self, query):
+        """
+        Turns a query string containing comma-separated phrases into a
+        space-separated list of tokens, quoted if containing
+        whitespace. For example, input
+
+          'some words, foo, bar'
+
+        becomes
+
+          '"some words" foo bar'
+
+        This comes in handy during the composition of certain queries.
+        """
+        if query.find(',') < 0:
+            return query
+        phrases = []
+        for phrase in query.split(','):
+            phrase = phrase.strip()
+            if phrase.find(' ') > 0:
+                phrase = '"' + phrase + '"'
+            phrases.append(phrase)
+        return ' '.join(phrases)
+
 
 class ClusterScholarQuery(ScholarQuery):
     """
@@ -767,17 +795,9 @@ class SearchScholarQuery(ScholarQuery):
         words_none = None
 
         if self.words_some:
-            if self.words_some.find(',') >= 0:
-                phrases = self.words_some.split(',')
-                words_some = ' '.join(['"' + phrase.strip() + '"' for phrase in phrases])
-            else:
-                words_some = self.words_some
+            words_some = self._parenthesize_phrases(self.words_some)
         if self.words_none:
-            if self.words_none.find(',') >= 0:
-                phrases = self.words_none.split(',')
-                words_none = ' '.join(['"' + phrase.strip() + '"' for phrase in phrases])
-            else:
-                words_none = self.words_none
+            words_none = self._parenthesize_phrases(self.words_none)
 
         urlargs = {'words': self.words or '',
                    'words_some': words_some or '',
@@ -1022,7 +1042,7 @@ class ScholarQuerier(object):
         if err_msg is None:
             err_msg = 'request failed'
         try:
-            ScholarUtils.log('info', 'requesting %s' % url)
+            ScholarUtils.log('info', 'requesting %s' % unquote(url))
 
             req = Request(url=url, headers={'User-Agent': ScholarConf.USER_AGENT})
             hdl = self.opener.open(req)
