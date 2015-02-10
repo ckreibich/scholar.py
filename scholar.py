@@ -183,10 +183,10 @@ if sys.version_info[0] == 3:
     encode = lambda s: s # pylint: disable-msg=C0103
 else:
     def encode(s):
-        if isinstance(s, (int, long, float, complex)):
-            return str(s)
-        else:
+        if isinstance(s, basestring):
             return s.encode('utf-8') # pylint: disable-msg=C0103
+        else:
+            return str(s)
 
 
 class Error(Exception):
