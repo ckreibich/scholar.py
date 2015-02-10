@@ -7,6 +7,9 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.9   Fixed Unicode problem in certain queries. Thanks to smidm for
+#       this contribution.
+#
 # 2.8   Improved quotation-mark handling for multi-word phrases in
 #       queries. Also, log URLs %-decoded in debugging output, for
 #       easier interpretation.
@@ -204,7 +207,7 @@ class QueryArgumentError(Error):
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.8'
+    VERSION = '2.9'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 20 # Current maximum for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
