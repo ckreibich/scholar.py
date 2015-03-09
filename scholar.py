@@ -402,10 +402,10 @@ class ScholarArticleParser(object):
                     # next pages in the results, the number will be preceded of
                     # 'Page <K> of ...'
                     resultsPosition = 0
-                    if   raw_text[0].upper().find(PAGE_RESULTS_KEYWORD) > 0:
+                    if raw_text[0].upper().find(PAGE_RESULTS_KEYWORD)  >= 0:
                         resultsPosition += 3
                         
-                    if raw_text[0].upper().find(ABOUT_RESULTS_KEYWORD) > 0:
+                    if raw_text[0].upper().find(ABOUT_RESULTS_KEYWORD) >= 0:
                         resultsPosition += 1
                         
                     num_results = raw_text[0].split()[resultsPosition]
