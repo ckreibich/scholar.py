@@ -7,6 +7,15 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 3.0   Fixed the algorithm to recover the number of results returned by google
+#       scholar. It now is able to parse the number of results when these are 
+#       well defined by google and when it is an approximation. Also it is able
+#       of obtaining the number of results regardless of the page we are.
+#       Fixed the SearchScholarQuery and ClusterScholarQuery in order to obtain
+#       all the results returned by google scholar. It is limited to 1000 
+#       results (google's limit). The count option limits the number of final
+#       results returned by the query.
+#
 # 2.9   Fixed Unicode problem in certain queries. Thanks to smidm for
 #       this contribution.
 #
@@ -207,9 +216,10 @@ class QueryArgumentError(Error):
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.9'
+    VERSION = '3.0'
     LOG_LEVEL = 1
-    MAX_PAGE_RESULTS = 20 # Current maximum for per-page results
+    MAX_PAGE_RESULTS = 20   # Current maximum for per-page results
+    MAX_RESULTS      = 1000 # Current maximum results for google scholar
     SCHOLAR_SITE = 'http://scholar.google.com'
 
     # USER_AGENT = 'Mozilla/5.0 (X11; U; FreeBSD i386; en-US; rv:1.9.2.9) Gecko/20100913 Firefox/3.6.9'
@@ -378,13 +388,28 @@ class ScholarArticleParser(object):
             self.article['title'] = self.article['title'].strip()
 
     def _parse_globals(self):
+        PAGE_RESULTS_KEYWORD  = 'PAGE'
+        ABOUT_RESULTS_KEYWORD = 'ABOUT'
+
         tag = self.soup.find(name='div', attrs={'id': 'gs_ab_md'})
         if tag is not None:
             raw_text = tag.findAll(text=True)
             # raw text is a list because the body contains <b> etc
             if raw_text is not None and len(raw_text) > 0:
                 try:
-                    num_results = raw_text[0].split()[1]
+                    # According to the number of results, the number can be
+                    # preceded of the keyword 'about'. If we are looking to 
+                    # next pages in the results, the number will be preceded of
+                    # 'Page <K> of ...'
+                    resultsPosition = 0
+                    if   raw_text[0].upper().find(PAGE_RESULTS_KEYWORD) > 0:
+                        resultsPosition += 3
+                        
+                    if raw_text[0].upper().find(ABOUT_RESULTS_KEYWORD) > 0:
+                        resultsPosition += 1
+                        
+                    num_results = raw_text[0].split()[resultsPosition]
+
                     # num_results may now contain commas to separate
                     # thousands, strip:
                     num_results = num_results.replace(',', '')
@@ -601,7 +626,10 @@ class ScholarQuery(object):
         # The number of results requested from Scholar -- not the
         # total number of results it reports (the latter gets stored
         # in attrs, see below).
-        self.num_results = ScholarConf.MAX_PAGE_RESULTS
+        self.num_results = ScholarConf.MAX_RESULTS
+        
+        # The number of results per page requested from Scholar
+        self.num_results_per_page = ScholarConf.MAX_PAGE_RESULTS
 
         # Queries may have global result attributes, similar to
         # per-article attributes in ScholarArticle. The exact set of
@@ -609,11 +637,15 @@ class ScholarQuery(object):
         # basic data structure:
         self.attrs = {}
 
+    def set_num_results(self, num_results):
+        msg = 'maximum number of results must be numeric'
+        self.num_results = ScholarUtils.ensure_int(num_results, msg)
+
     def set_num_page_results(self, num_page_results):
         msg = 'maximum number of results on page must be numeric'
-        self.num_results = ScholarUtils.ensure_int(num_page_results, msg)
+        self.num_results_per_page = ScholarUtils.ensure_int(num_page_results, msg)
 
-    def get_url(self):
+    def get_url(self, resultStartNumber = 0):
         """
         Returns a complete, submittable URL string for this particular
         query instance. The URL and its arguments will vary depending
@@ -675,7 +707,8 @@ class ClusterScholarQuery(ScholarQuery):
     know about.
     """
     SCHOLAR_CLUSTER_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
-        + 'cluster=%(cluster)s' \
+        + 'start=%(resultStartNumber)s' \
+        + '&cluster=%(cluster)s' \
         + '&num=%(num)s'
 
     def __init__(self, cluster=None):
@@ -691,12 +724,13 @@ class ClusterScholarQuery(ScholarQuery):
         msg = 'cluster ID must be numeric'
         self.cluster = ScholarUtils.ensure_int(cluster, msg)
 
-    def get_url(self):
+    def get_url(self, resultStartNumber = 0):
         if self.cluster is None:
             raise QueryArgumentError('cluster query needs cluster ID')
 
-        urlargs = {'cluster': self.cluster,
-                   'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
+        urlargs = {'resultStartNumber': resultStartNumber,
+                   'cluster': self.cluster,
+                   'num': self.num_results_per_page or ScholarConf.MAX_PAGE_RESULTS}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
@@ -710,7 +744,8 @@ class SearchScholarQuery(ScholarQuery):
     configure on the Scholar website, in the advanced search options.
     """
     SCHOLAR_QUERY_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
-        + 'as_q=%(words)s' \
+        + 'start=%(resultStartNumber)s' \
+        + '&as_q=%(words)s' \
         + '&as_epq=%(phrase)s' \
         + '&as_oq=%(words_some)s' \
         + '&as_eq=%(words_none)s' \
@@ -786,7 +821,7 @@ class SearchScholarQuery(ScholarQuery):
     def set_include_patents(self, yesorno):
         self.include_patents = yesorno
 
-    def get_url(self):
+    def get_url(self, resultStartNumber = 0):
         if self.words is None and self.words_some is None \
            and self.words_none is None and self.phrase is None \
            and self.author is None and self.pub is None \
@@ -806,7 +841,8 @@ class SearchScholarQuery(ScholarQuery):
         if self.words_none:
             words_none = self._parenthesize_phrases(self.words_none)
 
-        urlargs = {'words': self.words or '',
+        urlargs = {'resultStartNumber': resultStartNumber,
+                   'words': self.words or '',
                    'words_some': words_some or '',
                    'words_none': words_none or '',
                    'phrase': self.phrase or '',
@@ -817,7 +853,7 @@ class SearchScholarQuery(ScholarQuery):
                    'yhi': self.timeframe[1] or '',
                    'patents': '0' if self.include_patents else '1',
                    'citations': '0' if self.include_citations else '1',
-                   'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
+                   'num': self.num_results_per_page or ScholarConf.MAX_PAGE_RESULTS}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
@@ -980,13 +1016,26 @@ class ScholarQuerier(object):
         self.clear_articles()
         self.query = query
 
-        html = self._get_http_response(url=query.get_url(),
-                                       log_msg='dump of query response HTML',
-                                       err_msg='results retrieval failed')
-        if html is None:
-            return
+        # The query will be executed until the number of articles defined has 
+        # been reached or until there is no more articles for google scholar to
+        # return. This might occur if we reach the number of items returned for
+        # the parameters inserted in the query or if we reach the maximum limit
+        # defined by google scholar.
+        startSearchNumber = 0
+        scholarResults    = ScholarConf.MAX_RESULTS
+        while startSearchNumber < self.query.num_results \
+          and startSearchNumber < scholarResults:
+            html = self._get_http_response(url=query.get_url(startSearchNumber),
+                                           log_msg='dump of query response HTML',
+                                           err_msg='results retrieval failed')
+            if html is None:
+                return
+    
+            self.parse(html)
 
-        self.parse(html)
+            startSearchNumber += self.query.num_results_per_page
+            scholarResults     = min( ScholarConf.MAX_RESULTS \
+                                    , self.query.attrs['num_results'][0])
 
     def get_citation_data(self, article):
         """
@@ -1249,8 +1298,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
             query.set_include_citations(False)
 
     if options.count is not None:
-        options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
-        query.set_num_page_results(options.count)
+        options.count = min(options.count, ScholarConf.MAX_RESULTS)
+        query.set_num_results(options.count)
 
     querier.send_query(query)
 
