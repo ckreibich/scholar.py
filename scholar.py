@@ -728,9 +728,17 @@ class ClusterScholarQuery(ScholarQuery):
         if self.cluster is None:
             raise QueryArgumentError('cluster query needs cluster ID')
 
+        # The number of results per page corresponds to the minimum between:
+        #     1. Number of results per page
+        #     2. Maximum number of results per page
+        #     3. Difference between the total number of results and the actual results
+        resultsPerPage = min( self.num_results_per_page    \
+                            , ScholarConf.MAX_PAGE_RESULTS \
+                            , self.num_results - resultStartNumber )
+                            
         urlargs = {'resultStartNumber': resultStartNumber,
                    'cluster': self.cluster,
-                   'num': self.num_results_per_page or ScholarConf.MAX_PAGE_RESULTS}
+                   'num': resultsPerPage }
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
@@ -841,6 +849,14 @@ class SearchScholarQuery(ScholarQuery):
         if self.words_none:
             words_none = self._parenthesize_phrases(self.words_none)
 
+        # The number of results per page corresponds to the minimum between:
+        #     1. Number of results per page
+        #     2. Maximum number of results per page
+        #     3. Difference between the total number of results and the actual results
+        resultsPerPage = min( self.num_results_per_page    \
+                            , ScholarConf.MAX_PAGE_RESULTS \
+                            , self.num_results - resultStartNumber )
+                            
         urlargs = {'resultStartNumber': resultStartNumber,
                    'words': self.words or '',
                    'words_some': words_some or '',
@@ -853,7 +869,7 @@ class SearchScholarQuery(ScholarQuery):
                    'yhi': self.timeframe[1] or '',
                    'patents': '0' if self.include_patents else '1',
                    'citations': '0' if self.include_citations else '1',
-                   'num': self.num_results_per_page or ScholarConf.MAX_PAGE_RESULTS}
+                   'num': resultsPerPage }
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
