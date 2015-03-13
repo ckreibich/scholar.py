@@ -15,6 +15,8 @@ page. It is not a recursive crawler.
 #       all the results returned by google scholar. It is limited to 1000 
 #       results (google's limit). The count option limits the number of final
 #       results returned by the query.
+#       Improved the form of obtaining the pdf files of an article. It know
+#       takes into account the links on the right of google scholar.
 #
 # 2.9   Fixed Unicode problem in certain queries. Thanks to smidm for
 #       this contribution.
@@ -425,6 +427,13 @@ class ScholarArticleParser(object):
             if not hasattr(tag, 'name'):
                 continue
 
+            if  tag.name == 'div' \
+            and self._tag_has_class(tag, 'gs_ggs') \
+            and self._tag_has_class(tag, 'gs_fl')  \
+            and tag.a:
+                if self._path2url(tag.a['href']).endswith('.pdf'):
+                    self.article['url_pdf'] = self._path2url(tag.a['href'])
+
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_rt') and \
                     tag.h3 and tag.h3.a:
                 self.article['title'] = ''.join(tag.h3.a.findAll(text=True))
@@ -564,6 +573,13 @@ class ScholarArticleParser120726(ScholarArticleParser):
             if str(tag).lower().find('.pdf'):
                 if tag.find('div', {'class': 'gs_ttss'}):
                     self._parse_links(tag.find('div', {'class': 'gs_ttss'}))
+
+            if  tag.name == 'div' \
+            and self._tag_has_class(tag, 'gs_ggs') \
+            and self._tag_has_class(tag, 'gs_fl')  \
+            and tag.a:
+                if self._path2url(tag.a['href']).endswith('.pdf'):
+                    self.article['url_pdf'] = self._path2url(tag.a['href'])
 
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_ri'):
                 # There are (at least) two formats here. In the first
