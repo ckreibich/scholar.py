@@ -17,6 +17,8 @@ page. It is not a recursive crawler.
 #       results returned by the query.
 #       Improved the form of obtaining the pdf files of an article. It know
 #       takes into account the links on the right of google scholar.
+#       Added the field url_related that is filled with the url of the related 
+#       articles.
 #
 # 2.9   Fixed Unicode problem in certain queries. Thanks to smidm for
 #       this contribution.
@@ -267,17 +269,18 @@ class ScholarArticle(object):
         # value, (2) a user-suitable label for the item, and (3) an
         # ordering index:
         self.attrs = {
-            'title':         [None, 'Title',          0],
-            'url':           [None, 'URL',            1],
-            'year':          [None, 'Year',           2],
-            'num_citations': [0,    'Citations',      3],
-            'num_versions':  [0,    'Versions',       4],
-            'cluster_id':    [None, 'Cluster ID',     5],
-            'url_pdf':       [None, 'PDF link',       6],
-            'url_citations': [None, 'Citations list', 7],
-            'url_versions':  [None, 'Versions list',  8],
-            'url_citation':  [None, 'Citation link',  9],
-            'excerpt':       [None, 'Excerpt',       10],
+            'title':         [None, 'Title',             0],
+            'url':           [None, 'URL',               1],
+            'year':          [None, 'Year',              2],
+            'num_citations': [0,    'Citations',         3],
+            'num_versions':  [0,    'Versions',          4],
+            'cluster_id':    [None, 'Cluster ID',        5],
+            'url_pdf':       [None, 'PDF link',          6],
+            'url_citations': [None, 'Citations list',    7],
+            'url_versions':  [None, 'Versions list',     8],
+            'url_citation':  [None, 'Citation link',     9],
+            'excerpt':       [None, 'Excerpt',          10],
+            'url_related':   [None, 'Related articles', 11],
         }
 
         # The citation data in one of the standard export formats,
@@ -476,6 +479,10 @@ class ScholarArticleParser(object):
                 for arg in args.split('&'):
                     if arg.startswith('cites='):
                         self.article['cluster_id'] = arg[6:]
+
+            if tag.get('href').startswith('/scholar?q=related'):
+                self.article['url_related'] = \
+                    self._strip_url_arg('num', self._path2url(tag.get('href')))
 
             if tag.get('href').startswith('/scholar?cluster'):
                 if hasattr(tag, 'string') and tag.string.startswith('All '):
