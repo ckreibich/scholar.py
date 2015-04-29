@@ -17,7 +17,7 @@ setup(
 	download_url = "https://github.com/ckreibich/scholar.py",
 	description = "scholar.py is a Python module that implements a querier and parser for Google Scholar's output. Its classes can be used independently, but it can also be invoked as a command-line tool.",
 	long_description=open('README.md').read(),
-    scripts=['bin/scholar.py' ],
-	py_modules = ["scholar"],
+    scripts=['bin/scholar' ],
+	py_modules = ["scholar", ],
 	install_requires=install_reqs,
 )

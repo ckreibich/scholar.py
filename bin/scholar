@@ -4,7 +4,7 @@ import optparse
 import sys
 
 from scholar import (ScholarConf, ScholarUtils, ScholarQuerier,
-    ScholarSettings, ScholarQuerier, SearchScholarQuery)
+    ScholarSettings, ScholarQuerier, SearchScholarQuery, txt, citation_export)
 
 
 def main():
