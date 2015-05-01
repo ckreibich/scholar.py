@@ -4,7 +4,7 @@
 from pip.req import parse_requirements
 from setuptools import setup
 
-reqs = parse_requirements("requirements.txt")
+reqs = parse_requirements("requirements.txt", session=uuid.uuid1())
 install_reqs = filter(bool,[str(ir.req) for ir in reqs])
 
 setup(
