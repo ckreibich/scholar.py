@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #coding: utf-8
-
+import uuid
 from pip.req import parse_requirements
 from setuptools import setup
 
