@@ -164,7 +164,7 @@ try:
     from urllib.request import HTTPCookieProcessor, Request, build_opener
     from urllib.parse import quote, unquote
     from http.cookiejar import MozillaCookieJar
-except ImportError:
+except ImportScholarError:
     # Fallback for Python 2
     from urllib2 import Request, build_opener, HTTPCookieProcessor
     from urllib import quote, unquote
@@ -173,10 +173,10 @@ except ImportError:
 # Import BeautifulSoup -- try 4 first, fall back to older
 try:
     from bs4 import BeautifulSoup
-except ImportError:
+except ImportScholarError:
     try:
         from BeautifulSoup import BeautifulSoup
-    except ImportError:
+    except ImportScholarError:
         print('We need BeautifulSoup, sorry...')
         sys.exit(1)
 
@@ -192,15 +192,15 @@ else:
             return str(s)
 
 
-class Error(Exception):
+class ScholarError(Exception):
     """Base class for any Scholar error."""
 
 
-class FormatError(Error):
+class FormatScholarError(ScholarError):
     """A query argument or setting was formatted incorrectly."""
 
 
-class QueryArgumentError(Error):
+class QueryArgumentScholarError(ScholarError):
     """A query did not have a suitable set of arguments."""
 
 
@@ -232,8 +232,8 @@ class ScholarUtils(object):
     def ensure_int(arg, msg=None):
         try:
             return int(arg)
-        except ValueError:
-            raise FormatError(msg)
+        except ValueScholarError:
+            raise FormatScholarError(msg)
 
     @staticmethod
     def log(level, msg):
@@ -390,7 +390,7 @@ class ScholarArticleParser(object):
                     num_results = num_results.replace(',', '')
                     num_results = int(num_results)
                     self.handle_num_results(num_results)
-                except (IndexError, ValueError):
+                except (IndexScholarError, ValueScholarError):
                     pass
 
     def _parse_article(self, div):
@@ -476,7 +476,7 @@ class ScholarArticleParser(object):
     def _as_int(obj):
         try:
             return int(obj)
-        except ValueError:
+        except ValueScholarError:
             return None
 
     def _path2url(self, path):
@@ -693,7 +693,7 @@ class ClusterScholarQuery(ScholarQuery):
 
     def get_url(self):
         if self.cluster is None:
-            raise QueryArgumentError('cluster query needs cluster ID')
+            raise QueryArgumentScholarError('cluster query needs cluster ID')
 
         urlargs = {'cluster': self.cluster,
                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
@@ -791,7 +791,7 @@ class SearchScholarQuery(ScholarQuery):
            and self.words_none is None and self.phrase is None \
            and self.author is None and self.pub is None \
            and self.timeframe[0] is None and self.timeframe[1] is None:
-            raise QueryArgumentError('search query needs more parameters')
+            raise QueryArgumentScholarError('search query needs more parameters')
 
         # If we have some-words or none-words lists, we need to
         # process them so GS understands them. For simple
@@ -846,7 +846,7 @@ class ScholarSettings(object):
     def set_citation_format(self, citform):
         citform = ScholarUtils.ensure_int(citform)
         if citform < 0 or citform > self.CITFORM_BIBTEX:
-            raise FormatError('citation format invalid, is "%s"' \
+            raise FormatScholarError('citation format invalid, is "%s"' \
                               % citform)
         self.citform = citform
         self._is_configured = True
@@ -1069,7 +1069,7 @@ class ScholarQuerier(object):
             return None
 
 
-def txt(querier, with_globals):
+def Scholar_txt(querier, with_globals):
     if with_globals:
         # If we have any articles, check their attribute labels to get
         # the maximum length -- makes for nicer alignment.
@@ -1094,20 +1094,20 @@ def txt(querier, with_globals):
     for art in articles:
         print(encode(art.as_txt()) + '\n')
 
-def csv(querier, header=False, sep='|'):
+def Scholar_csv(querier, header=False, sep='|'):
     articles = querier.articles
     for art in articles:
         result = art.as_csv(header=header, sep=sep)
         print(encode(result))
         header = False
 
-def citation_export(querier):
+def Scholar_citation_export(querier):
     articles = querier.articles
     for art in articles:
         print(art.as_citation() + '\n')
 
 
-def main():
+def Scholar_main():
     usage = """scholar.py [options] <query string>
 A command-line interface to Google Scholar.
 
@@ -1269,4 +1269,4 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     return 0
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(Scholar_main())
