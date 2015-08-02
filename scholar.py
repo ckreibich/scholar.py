@@ -1255,13 +1255,13 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     querier.send_query(query)
 
     if options.csv:
-        csv(querier)
+        Scholar_csv(querier)
     elif options.csv_header:
-        csv(querier, header=True)
+        Scholar_csv(querier, header=True)
     elif options.citation is not None:
-        citation_export(querier)
+        Scholar_citation_export(querier)
     else:
-        txt(querier, with_globals=options.txt_globals)
+        Scholar_txt(querier, with_globals=options.txt_globals)
 
     if options.cookie_file:
         querier.save_cookies()
