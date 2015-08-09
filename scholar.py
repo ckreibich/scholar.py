@@ -164,7 +164,7 @@ try:
     from urllib.request import HTTPCookieProcessor, Request, build_opener
     from urllib.parse import quote, unquote
     from http.cookiejar import MozillaCookieJar
-except ImportScholarError:
+except ImportError:
     # Fallback for Python 2
     from urllib2 import Request, build_opener, HTTPCookieProcessor
     from urllib import quote, unquote
@@ -173,10 +173,10 @@ except ImportScholarError:
 # Import BeautifulSoup -- try 4 first, fall back to older
 try:
     from bs4 import BeautifulSoup
-except ImportScholarError:
+except ImportError:
     try:
         from BeautifulSoup import BeautifulSoup
-    except ImportScholarError:
+    except ImportError:
         print('We need BeautifulSoup, sorry...')
         sys.exit(1)
 
