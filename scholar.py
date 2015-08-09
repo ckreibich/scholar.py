@@ -232,7 +232,7 @@ class ScholarUtils(object):
     def ensure_int(arg, msg=None):
         try:
             return int(arg)
-        except ValueScholarError:
+        except ValueError:
             raise FormatScholarError(msg)
 
     @staticmethod
@@ -390,7 +390,7 @@ class ScholarArticleParser(object):
                     num_results = num_results.replace(',', '')
                     num_results = int(num_results)
                     self.handle_num_results(num_results)
-                except (IndexScholarError, ValueScholarError):
+                except (IndexError, ValueError):
                     pass
 
     def _parse_article(self, div):
@@ -476,7 +476,7 @@ class ScholarArticleParser(object):
     def _as_int(obj):
         try:
             return int(obj)
-        except ValueScholarError:
+        except ValueError:
             return None
 
     def _path2url(self, path):
