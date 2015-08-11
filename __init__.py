@@ -1,1 +1,0 @@
-from scholar import *
