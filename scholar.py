@@ -1104,7 +1104,7 @@ def Scholar_csv(querier, header=False, sep='|'):
 def Scholar_citation_export(querier):
     articles = querier.articles
     for art in articles:
-        print(art.as_citation() + '\n')
+        print(art.as_citation().decode('utf-8') + '\n')
 
 
 def Scholar_main():
