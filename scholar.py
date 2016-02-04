@@ -195,15 +195,15 @@ else:
             return str(s)
 
 
-class Error(Exception):
+class ScholarError(Exception):
     """Base class for any Scholar error."""
 
 
-class FormatError(Error):
+class FormatScholarError(ScholarError):
     """A query argument or setting was formatted incorrectly."""
 
 
-class QueryArgumentError(Error):
+class QueryArgumentScholarError(ScholarError):
     """A query did not have a suitable set of arguments."""
 
 
@@ -236,7 +236,7 @@ class ScholarUtils(object):
         try:
             return int(arg)
         except ValueError:
-            raise FormatError(msg)
+            raise FormatScholarError(msg)
 
     @staticmethod
     def log(level, msg):
@@ -696,7 +696,7 @@ class ClusterScholarQuery(ScholarQuery):
 
     def get_url(self):
         if self.cluster is None:
-            raise QueryArgumentError('cluster query needs cluster ID')
+            raise QueryArgumentScholarError('cluster query needs cluster ID')
 
         urlargs = {'cluster': self.cluster,
                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
@@ -794,7 +794,7 @@ class SearchScholarQuery(ScholarQuery):
            and self.words_none is None and self.phrase is None \
            and self.author is None and self.pub is None \
            and self.timeframe[0] is None and self.timeframe[1] is None:
-            raise QueryArgumentError('search query needs more parameters')
+            raise QueryArgumentScholarError('search query needs more parameters')
 
         # If we have some-words or none-words lists, we need to
         # process them so GS understands them. For simple
@@ -849,7 +849,7 @@ class ScholarSettings(object):
     def set_citation_format(self, citform):
         citform = ScholarUtils.ensure_int(citform)
         if citform < 0 or citform > self.CITFORM_BIBTEX:
-            raise FormatError('citation format invalid, is "%s"' \
+            raise FormatScholarError('citation format invalid, is "%s"' \
                               % citform)
         self.citform = citform
         self._is_configured = True
@@ -1072,7 +1072,7 @@ class ScholarQuerier(object):
             return None
 
 
-def txt(querier, with_globals):
+def Scholar_txt(querier, with_globals):
     if with_globals:
         # If we have any articles, check their attribute labels to get
         # the maximum length -- makes for nicer alignment.
@@ -1097,20 +1097,20 @@ def txt(querier, with_globals):
     for art in articles:
         print(encode(art.as_txt()) + '\n')
 
-def csv(querier, header=False, sep='|'):
+def Scholar_csv(querier, header=False, sep='|'):
     articles = querier.articles
     for art in articles:
         result = art.as_csv(header=header, sep=sep)
         print(encode(result))
         header = False
 
-def citation_export(querier):
+def Scholar_citation_export(querier):
     articles = querier.articles
     for art in articles:
-        print(art.as_citation() + '\n')
+        print(art.as_citation().decode('utf-8') + '\n') #fix issue #33 #40
 
 
-def main():
+def Scholar_main():
     usage = """scholar.py [options] <query string>
 A command-line interface to Google Scholar.
 
@@ -1258,13 +1258,13 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     querier.send_query(query)
 
     if options.csv:
-        csv(querier)
+        Scholar_csv(querier)
     elif options.csv_header:
-        csv(querier, header=True)
+        Scholar_csv(querier, header=True)
     elif options.citation is not None:
-        citation_export(querier)
+        Scholar_citation_export(querier)
     else:
-        txt(querier, with_globals=options.txt_globals)
+        Scholar_txt(querier, with_globals=options.txt_globals)
 
     if options.cookie_file:
         querier.save_cookies()
@@ -1272,4 +1272,4 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     return 0
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(Scholar_main())
