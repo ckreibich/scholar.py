@@ -183,7 +183,7 @@ except ImportError:
 # Support unicode in both Python 2 and 3. In Python 3, unicode is str.
 if sys.version_info[0] == 3:
     unicode = str # pylint: disable-msg=W0622
-    encode = lambda s: s # pylint: disable-msg=C0103
+    encode = lambda s: unicode(s) # pylint: disable-msg=C0103
 else:
     def encode(s):
         if isinstance(s, basestring):
