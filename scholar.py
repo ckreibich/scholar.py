@@ -7,6 +7,9 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.10  Merged a fix for the "TypError: quote_from_bytes()" problem on
+#       Python 3.x from hinnefe2.
+#
 # 2.9   Fixed Unicode problem in certain queries. Thanks to smidm for
 #       this contribution.
 #
@@ -207,7 +210,7 @@ class QueryArgumentError(Error):
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.9'
+    VERSION = '2.10'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 20 # Current maximum for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
