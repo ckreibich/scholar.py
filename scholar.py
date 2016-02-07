@@ -159,6 +159,7 @@ import optparse
 import os
 import sys
 import re
+import json
 
 try:
     # Try importing for Python 3
@@ -1071,6 +1072,24 @@ class ScholarQuerier(object):
             ScholarUtils.log('info', err_msg + ': %s' % err)
             return None
 
+def toJson(querier):
+    articles = querier.articles
+    results = []
+    for art in articles:
+        jsonArt = {}
+        aux = art.as_csv().split("|")
+        jsonArt["title"] = aux[0]
+        jsonArt["url"] = aux[1]
+        jsonArt["year"] = int(aux[2])  if isinstance(aux[2], int) or aux[2].isnumeric() else None
+        jsonArt["citations"] = int(aux[3])  if isinstance(aux[3], int) or aux[3].isnumeric() else None
+        jsonArt["versions"] = int(aux[4])  if isinstance(aux[4], int) or aux[4].isnumeric() else None
+        jsonArt["cluster_id"] = aux[5]
+        jsonArt["url_pdf"] = aux[6]
+        jsonArt["url_citations"] = aux[7]
+        jsonArt["url_versions"] = aux[8]
+        jsonArt["url_citation"] = aux[9]
+        results.append(jsonArt)
+    print json.dumps(results)
 
 def txt(querier, with_globals):
     if with_globals:
@@ -1166,6 +1185,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Like --txt, but first print global results too')
     group.add_option('--csv', action='store_true',
                      help='Print article data in CSV form (separator is "|")')
+    group.add_option('--json', action='store_true',
+                     help='Print article data as JSON')
     group.add_option('--csv-header', action='store_true',
                      help='Like --csv, but print header with column names')
     group.add_option('--citation', metavar='FORMAT', default=None,
@@ -1263,6 +1284,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         csv(querier, header=True)
     elif options.citation is not None:
         citation_export(querier)
+    elif options.json:
+        toJson(querier)
     else:
         txt(querier, with_globals=options.txt_globals)
 
