@@ -27,6 +27,11 @@ API, but I will never add features that intentionally try to work
 around the query limits imposed by Google Scholar. Please don't ask me
 to add such features.
 
+Requirements
+------------
+
+- BeautifulSoup
+
 Examples
 --------
 
@@ -65,7 +70,7 @@ Note the cluster ID in the above. Using this ID, you can directly access the clu
           Versions 0
           PDF link http://www.informationphilosopher.com/solutions/scientists/einstein/1917_Radiation.pdf
            Excerpt The formal similarity between the chromatic distribution curve for thermal radiation [...]
-    
+
              Title The Quantum Theory of Radiation
                URL http://web.ihep.su/dbserv/compas/src/einstein17/eng.pdf
          Citations 0
