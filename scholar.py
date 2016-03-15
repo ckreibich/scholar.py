@@ -460,7 +460,7 @@ class ScholarArticleParser(object):
     @staticmethod
     def _tag_has_class(tag, klass):
         """
-        This predicate function checks whether a BeatifulSoup Tag instance
+        This predicate function checks whether a BeautifulSoup Tag instance
         has a class attribute.
         """
         res = tag.get('class') or []
@@ -735,7 +735,7 @@ class SearchScholarQuery(ScholarQuery):
         self.words_none = None # None of these words
         self.phrase = None
         self.scope_title = False # If True, search in title only
-        self.author = None 
+        self.author = None
         self.pub = None
         self.timeframe = [None, None]
         self.include_patents = True
