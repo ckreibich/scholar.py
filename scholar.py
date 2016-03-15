@@ -359,7 +359,7 @@ class ScholarArticleParser(object):
         content as needed, and notifies the parser instance of
         resulting instances via the handle_article callback.
         """
-        self.soup = BeautifulSoup(html)
+        self.soup = BeautifulSoup(html, "html.parser")
 
         # This parses any global, non-itemized attributes from the page.
         self._parse_globals()
@@ -945,7 +945,7 @@ class ScholarQuerier(object):
         # Now parse the required stuff out of the form. We require the
         # "scisig" token to make the upload of our settings acceptable
         # to Google.
-        soup = BeautifulSoup(html)
+        soup = BeautifulSoup(html, "html.parser")
 
         tag = soup.find(name='form', attrs={'id': 'gs_settings_form'})
         if tag is None:
