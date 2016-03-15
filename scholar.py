@@ -325,7 +325,7 @@ class ScholarArticle(object):
         if you have configured the querier to retrieve a particular
         citation export format. (See ScholarSettings.)
         """
-        return self.citation_data or ''
+        return (self.citation_data or b'').decode()
 
 
 class ScholarArticleParser(object):
