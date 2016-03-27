@@ -244,7 +244,7 @@ class ScholarUtils(object):
             return
         if ScholarUtils.LOG_LEVELS[level] > ScholarConf.LOG_LEVEL:
             return
-        sys.stderr.write('[%5s]  %s' % (level.upper(), msg + '\n'))
+        sys.stderr.write('[%5s]  %s' % (level.upper(), encode(msg) + '\n'))
         sys.stderr.flush()
 
 
