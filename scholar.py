@@ -264,11 +264,12 @@ class ScholarArticle(object):
             'num_citations': [0,    'Citations',      3],
             'num_versions':  [0,    'Versions',       4],
             'cluster_id':    [None, 'Cluster ID',     5],
-            'url_pdf':       [None, 'PDF link',       6],
-            'url_citations': [None, 'Citations list', 7],
-            'url_versions':  [None, 'Versions list',  8],
-            'url_citation':  [None, 'Citation link',  9],
-            'excerpt':       [None, 'Excerpt',       10],
+            'article_id':    [None, 'Article ID',     6],
+            'url_pdf':       [None, 'PDF link',       7],
+            'url_citations': [None, 'Citations list', 8],
+            'url_versions':  [None, 'Versions list',  9],
+            'url_citation':  [None, 'Citation link', 10],
+            'excerpt':       [None, 'Excerpt',       11],
         }
 
         # The citation data in one of the standard export formats,
@@ -452,6 +453,9 @@ class ScholarArticleParser(object):
                         self._as_int(tag.string.split()[1])
                 self.article['url_versions'] = \
                     self._strip_url_arg('num', self._path2url(tag.get('href')))
+
+            if tag.get('href').startswith('/scholar?q=related'):
+                self.article['article_id'] = tag.get('href').split(':')[1]
 
             if tag.getText().startswith('Import'):
                 self.article['url_citation'] = self._path2url(tag.get('href'))
@@ -706,6 +710,36 @@ class ClusterScholarQuery(ScholarQuery):
 
         return self.SCHOLAR_CLUSTER_URL % urlargs
 
+class RelatedScholarQuery(ScholarQuery):
+    """
+    This version just pulls up related articles of an article whose ID we already
+    know about.
+    """
+    SCHOLAR_RELATED_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
+        + 'q=related:%(article_id)s:scholar.google.com' \
+        + '&num=%(num)s'
+
+    def __init__(self, article_id=None):
+        ScholarQuery.__init__(self)
+        self._add_attribute_type('num_results', 'Results', 0)
+        self.article_id = None
+        self.set_article_id(article_id)
+
+    def set_article_id(self, article_id):
+        self.article_id = article_id
+
+    def get_url(self):
+        if self.article_id is None:
+            raise QueryArgumentError('related articles query needs article ID')
+
+        urlargs = {'article_id': self.article_id,
+                   'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
+
+        for key, val in urlargs.items():
+            urlargs[key] = quote(encode(val))
+
+        return self.SCHOLAR_RELATED_URL % urlargs
+
 
 class SearchScholarQuery(ScholarQuery):
     """
@@ -735,7 +769,7 @@ class SearchScholarQuery(ScholarQuery):
         self.words_none = None # None of these words
         self.phrase = None
         self.scope_title = False # If True, search in title only
-        self.author = None 
+        self.author = None
         self.pub = None
         self.timeframe = [None, None]
         self.include_patents = True
@@ -1154,6 +1188,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not include citations in results')
     group.add_option('-C', '--cluster-id', metavar='CLUSTER_ID', default=None,
                      help='Do not search, just use articles in given cluster ID')
+    group.add_option('-r', '--related', metavar='ARTICLE_ID', default=None,
+                     help='Get related articles of a given article ID')
     group.add_option('-c', '--count', type='int', default=None,
                      help='Maximum number of results')
     parser.add_option_group(group)
@@ -1200,14 +1236,21 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     if options.cookie_file:
         ScholarConf.COOKIE_JAR_FILE = options.cookie_file
 
+    have_search_arguments = options.author or options.allw or options.some or options.none \
+                            or options.phrase or options.title_only or options.pub \
+                            or options.after or options.before
+
     # Sanity-check the options: if they include a cluster ID query, it
     # makes no sense to have search arguments:
-    if options.cluster_id is not None:
-        if options.author or options.allw or options.some or options.none \
-           or options.phrase or options.title_only or options.pub \
-           or options.after or options.before:
-            print('Cluster ID queries do not allow additional search arguments.')
-            return 1
+    if options.cluster_id is not None and have_search_arguments:
+        print('Cluster ID queries do not allow additional search arguments.')
+        return 1
+
+    # Sanity-check the options: if they include a related articles query, it
+    # makes no sense to have search arguments:
+    if options.related is not None and have_search_arguments:
+        print('Related articles queries do not allow additional search arguments.')
+        return 1
 
     querier = ScholarQuerier()
     settings = ScholarSettings()
@@ -1228,6 +1271,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     if options.cluster_id:
         query = ClusterScholarQuery(cluster=options.cluster_id)
+    elif options.related:
+        query = RelatedScholarQuery(article_id=options.related)
     else:
         query = SearchScholarQuery()
         if options.author:
