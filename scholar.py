@@ -264,11 +264,12 @@ class ScholarArticle(object):
             'num_citations': [0,    'Citations',      3],
             'num_versions':  [0,    'Versions',       4],
             'cluster_id':    [None, 'Cluster ID',     5],
-            'url_pdf':       [None, 'PDF link',       6],
-            'url_citations': [None, 'Citations list', 7],
-            'url_versions':  [None, 'Versions list',  8],
-            'url_citation':  [None, 'Citation link',  9],
-            'excerpt':       [None, 'Excerpt',       10],
+            'article_id':    [None, 'Article ID',     6],
+            'url_pdf':       [None, 'PDF link',       7],
+            'url_citations': [None, 'Citations list', 8],
+            'url_versions':  [None, 'Versions list',  9],
+            'url_citation':  [None, 'Citation link', 10],
+            'excerpt':       [None, 'Excerpt',       11],
         }
 
         # The citation data in one of the standard export formats,
@@ -453,6 +454,9 @@ class ScholarArticleParser(object):
                 self.article['url_versions'] = \
                     self._strip_url_arg('num', self._path2url(tag.get('href')))
 
+            if tag.get('href').startswith('/scholar?q=related'):
+                self.article['article_id'] = tag.get('href').split(':')[1]
+
             if tag.getText().startswith('Import'):
                 self.article['url_citation'] = self._path2url(tag.get('href'))
 
@@ -601,6 +605,9 @@ class ScholarQuery(object):
     def __init__(self):
         self.url = None
 
+        # Page number, used to calculate start index
+        self.page = 1
+
         # The number of results requested from Scholar -- not the
         # total number of results it reports (the latter gets stored
         # in attrs, see below).
@@ -615,6 +622,13 @@ class ScholarQuery(object):
     def set_num_page_results(self, num_page_results):
         msg = 'maximum number of results on page must be numeric'
         self.num_results = ScholarUtils.ensure_int(num_page_results, msg)
+
+    def set_page(self, page):
+        msg = 'page number must be numeric'
+        self.page = ScholarUtils.ensure_int(page, msg)
+
+    def get_start_index(self):
+        return self.num_results * (self.page - 1)
 
     def get_url(self):
         """
@@ -679,6 +693,7 @@ class ClusterScholarQuery(ScholarQuery):
     """
     SCHOLAR_CLUSTER_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
         + 'cluster=%(cluster)s' \
+        + '&start=%(start)s' \
         + '&num=%(num)s'
 
     def __init__(self, cluster=None):
@@ -699,12 +714,45 @@ class ClusterScholarQuery(ScholarQuery):
             raise QueryArgumentError('cluster query needs cluster ID')
 
         urlargs = {'cluster': self.cluster,
+                   'start': self.get_start_index(),
                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
 
         return self.SCHOLAR_CLUSTER_URL % urlargs
+
+class RelatedScholarQuery(ScholarQuery):
+    """
+    This version just pulls up related articles of an article whose ID we already
+    know about.
+    """
+    SCHOLAR_RELATED_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
+        + 'q=related:%(article_id)s:scholar.google.com' \
+        + '&start=%(start)s' \
+        + '&num=%(num)s'
+
+    def __init__(self, article_id=None):
+        ScholarQuery.__init__(self)
+        self._add_attribute_type('num_results', 'Results', 0)
+        self.article_id = None
+        self.set_article_id(article_id)
+
+    def set_article_id(self, article_id):
+        self.article_id = article_id
+
+    def get_url(self):
+        if self.article_id is None:
+            raise QueryArgumentError('related articles query needs article ID')
+
+        urlargs = {'article_id': self.article_id,
+                   'start': self.get_start_index(),
+                   'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
+
+        for key, val in urlargs.items():
+            urlargs[key] = quote(encode(val))
+
+        return self.SCHOLAR_RELATED_URL % urlargs
 
 
 class SearchScholarQuery(ScholarQuery):
@@ -725,6 +773,7 @@ class SearchScholarQuery(ScholarQuery):
         + '&as_sdt=%(patents)s%%2C5' \
         + '&as_vis=%(citations)s' \
         + '&btnG=&hl=en' \
+        + '&start=%(start)s' \
         + '&num=%(num)s'
 
     def __init__(self):
@@ -735,7 +784,7 @@ class SearchScholarQuery(ScholarQuery):
         self.words_none = None # None of these words
         self.phrase = None
         self.scope_title = False # If True, search in title only
-        self.author = None 
+        self.author = None
         self.pub = None
         self.timeframe = [None, None]
         self.include_patents = True
@@ -820,6 +869,7 @@ class SearchScholarQuery(ScholarQuery):
                    'yhi': self.timeframe[1] or '',
                    'patents': '0' if self.include_patents else '1',
                    'citations': '0' if self.include_citations else '1',
+                   'start': self.get_start_index(),
                    'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS}
 
         for key, val in urlargs.items():
@@ -1154,8 +1204,12 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not include citations in results')
     group.add_option('-C', '--cluster-id', metavar='CLUSTER_ID', default=None,
                      help='Do not search, just use articles in given cluster ID')
+    group.add_option('-r', '--related', metavar='ARTICLE_ID', default=None,
+                     help='Get related articles of a given article ID')
     group.add_option('-c', '--count', type='int', default=None,
                      help='Maximum number of results')
+    group.add_option('--page', type='int', default=None,
+                     help='Page number, default to 1')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Output format',
@@ -1200,14 +1254,21 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     if options.cookie_file:
         ScholarConf.COOKIE_JAR_FILE = options.cookie_file
 
+    have_search_arguments = options.author or options.allw or options.some or options.none \
+                            or options.phrase or options.title_only or options.pub \
+                            or options.after or options.before
+
     # Sanity-check the options: if they include a cluster ID query, it
     # makes no sense to have search arguments:
-    if options.cluster_id is not None:
-        if options.author or options.allw or options.some or options.none \
-           or options.phrase or options.title_only or options.pub \
-           or options.after or options.before:
-            print('Cluster ID queries do not allow additional search arguments.')
-            return 1
+    if options.cluster_id is not None and have_search_arguments:
+        print('Cluster ID queries do not allow additional search arguments.')
+        return 1
+
+    # Sanity-check the options: if they include a related articles query, it
+    # makes no sense to have search arguments:
+    if options.related is not None and have_search_arguments:
+        print('Related articles queries do not allow additional search arguments.')
+        return 1
 
     querier = ScholarQuerier()
     settings = ScholarSettings()
@@ -1228,6 +1289,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     if options.cluster_id:
         query = ClusterScholarQuery(cluster=options.cluster_id)
+    elif options.related:
+        query = RelatedScholarQuery(article_id=options.related)
     else:
         query = SearchScholarQuery()
         if options.author:
@@ -1254,6 +1317,9 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     if options.count is not None:
         options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
         query.set_num_page_results(options.count)
+
+    if options.page is not None:
+        query.set_page(options.page)
 
     querier.send_query(query)
 
