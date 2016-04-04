@@ -159,6 +159,8 @@ import optparse
 import os
 import sys
 import re
+import json
+import pprint
 
 try:
     # Try importing for Python 3
@@ -326,6 +328,16 @@ class ScholarArticle(object):
         citation export format. (See ScholarSettings.)
         """
         return self.citation_data or ''
+
+
+    def as_json(self):
+        # Get items sorted in specified order:
+        items = sorted(list(self.attrs.values()), key=lambda item: item[2])
+        dict={}
+        for item in items:
+            if item[0] is not None:
+                dict[item[1].lower()]=item[0]
+        return dict
 
 
 class ScholarArticleParser(object):
@@ -1109,6 +1121,31 @@ def citation_export(querier):
     for art in articles:
         print(art.as_citation() + '\n')
 
+def json_export(querier):
+    articles = querier.articles
+    dict={}
+    i=0
+    for art in articles:
+        dict[i] = art.as_json()
+
+        #fetching BIBTEX results also, and combining all fields in the result, thereby creating an extended JSON output
+        result=[]
+        result=art.as_citation().split("\n")
+        for j in range(len(result)):
+            if result[j].find('=')!=-1:
+                getDetails=result[j].split("=")
+                heading=getDetails[0].strip().lower()
+                details=getDetails[1].strip()[1:len(getDetails[1].strip())-1]
+                if details[-1:]=='}':
+                    details=details[:-1]
+                if dict[i].get(heading,0)==0:
+                    dict[i][heading]=details
+        i=i+1
+    keys=json.dumps(dict, sort_keys=True,indent=4, separators=(',', ': '))
+    print keys
+    
+
+
 
 def main():
     usage = """scholar.py [options] <query string>
@@ -1170,6 +1207,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Like --csv, but print header with column names')
     group.add_option('--citation', metavar='FORMAT', default=None,
                      help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
+    group.add_option('--json', action='store_true',
+                     help='Print extended article data in json format')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Miscellaneous')
@@ -1212,7 +1251,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     querier = ScholarQuerier()
     settings = ScholarSettings()
 
-    if options.citation == 'bt':
+    if options.citation == 'bt' or options.json:
         settings.set_citation_format(ScholarSettings.CITFORM_BIBTEX)
     elif options.citation == 'en':
         settings.set_citation_format(ScholarSettings.CITFORM_ENDNOTE)
@@ -1263,6 +1302,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         csv(querier, header=True)
     elif options.citation is not None:
         citation_export(querier)
+    elif options.json:
+        json_export(querier)
     else:
         txt(querier, with_globals=options.txt_globals)
 
