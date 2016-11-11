@@ -49,7 +49,7 @@ Retrieve one article written by Einstein on quantum theory:
 
 Note the cluster ID in the above. Using this ID, you can directly access the cluster of articles Google Scholar has already determined to be variants of the same paper. So, let's see the versions:
 
-    $ scholar.py -C 17749203648027613321
+    $ scholar.py -c 19 -C 17749203648027613321
              Title On the quantum theory of radiation
                URL http://icole.mut-es.ac.ir/downloads/Sci_Sec/W1/Einstein%201917.pdf
          Citations 184
