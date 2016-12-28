@@ -157,8 +157,9 @@ page. It is not a recursive crawler.
 
 import optparse
 import os
-import sys
 import re
+import sys
+import warnings
 
 try:
     # Try importing for Python 3
@@ -206,6 +207,27 @@ class FormatError(Error):
 class QueryArgumentError(Error):
     """A query did not have a suitable set of arguments."""
 
+
+class SoupKitchen(object):
+    """Factory for creating BeautifulSoup instances."""
+
+    @staticmethod
+    def make_soup(markup, parser=None):
+        """Factory method returning a BeautifulSoup instance. The created
+        instance will use a parser of the given name, if supported by
+        the underlying BeautifulSoup instance.
+        """
+        if 'bs4' in sys.modules:
+            # We support parser specification. If the caller didn't
+            # specify one, leave it to BeautifulSoup to pick the most
+            # suitable one, but suppress the user warning that asks to
+            # select the most suitable parser ... which BS then
+            # selects anyway.
+            if parser is None:
+                warnings.filterwarnings('ignore', 'No parser was explicitly specified')
+            return BeautifulSoup(markup, parser)
+
+        return BeautifulSoup(markup)
 
 class ScholarConf(object):
     """Helper class for global settings."""
@@ -359,7 +381,7 @@ class ScholarArticleParser(object):
         content as needed, and notifies the parser instance of
         resulting instances via the handle_article callback.
         """
-        self.soup = BeautifulSoup(html)
+        self.soup = SoupKitchen.make_soup(html)
 
         # This parses any global, non-itemized attributes from the page.
         self._parse_globals()
@@ -945,7 +967,7 @@ class ScholarQuerier(object):
         # Now parse the required stuff out of the form. We require the
         # "scisig" token to make the upload of our settings acceptable
         # to Google.
-        soup = BeautifulSoup(html)
+        soup = SoupKitchen.make_soup(html)
 
         tag = soup.find(name='form', attrs={'id': 'gs_settings_form'})
         if tag is None:
