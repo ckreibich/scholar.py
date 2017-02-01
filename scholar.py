@@ -645,6 +645,10 @@ class ScholarQuery(object):
             num_page_results,
             'maximum number of results on page must be numeric')
 
+    def set_start(self, start):
+        msg = 'start offset must be numeric'
+        self.start = start
+
     def get_url(self):
         """
         Returns a complete, submittable URL string for this particular
@@ -739,6 +743,39 @@ class ClusterScholarQuery(ScholarQuery):
 
         return self.SCHOLAR_CLUSTER_URL % urlargs
 
+class CitesClusterScholarQuery(ScholarQuery):
+    """
+    This version just pulls up citations of an article cluster whose ID we already
+    know about.
+    """
+    SCHOLAR_CLUSTER_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
+        + 'oi=bibs&cites=%(cluster)s' \
+        + '&start=%(start)s'
+
+    def __init__(self, cluster=None):
+        ScholarQuery.__init__(self)
+        self.cluster = None
+        self.set_cluster(cluster)
+
+    def set_cluster(self, cluster):
+        """
+        Sets search to a Google Scholar results cluster ID.
+        """
+        msg = 'cluster ID must be numeric'
+        self.cluster = ScholarUtils.ensure_int(cluster, msg)
+
+    def get_url(self):
+        if self.cluster is None:
+            raise QueryArgumentError('cluster query needs cluster ID')
+
+        urlargs = {'cluster': self.cluster,
+                   'num': self.num_results or ScholarConf.MAX_PAGE_RESULTS,
+                   'start': self.start or 0}
+
+        for key, val in urlargs.items():
+            urlargs[key] = quote(str(val))
+
+        return self.SCHOLAR_CLUSTER_URL % urlargs
 
 class SearchScholarQuery(ScholarQuery):
     """
@@ -1191,6 +1228,9 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not search, just use articles in given cluster ID')
     group.add_option('-c', '--count', type='int', default=None,
                      help='Maximum number of results')
+    group.add_option('-S', '--start', type='int', default=0,
+                     help='For more than 20 citations, starting offset')
+    group.add_option('--cites', default=None, help='Output citations instead of cluster', action="store_true")
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Output format',
@@ -1262,7 +1302,10 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     querier.apply_settings(settings)
 
     if options.cluster_id:
-        query = ClusterScholarQuery(cluster=options.cluster_id)
+        if options.cites:
+          query = CitesClusterScholarQuery(cluster=options.cluster_id)
+        else:
+          query = ClusterScholarQuery(cluster=options.cluster_id)
     else:
         query = SearchScholarQuery()
         if options.author:
@@ -1289,6 +1332,9 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     if options.count is not None:
         options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
         query.set_num_page_results(options.count)
+
+    if options.start is not None:
+        query.set_start(options.start)
 
     querier.send_query(query)
 
