@@ -571,6 +571,12 @@ class ScholarArticleParser120726(ScholarArticleParser):
                 if tag.find('div', {'class': 'gs_ttss'}):
                     self._parse_links(tag.find('div', {'class': 'gs_ttss'}))
 
+            if tag.div.a:
+               candstr = self._path2url(tag.div.a['href'])
+               if candstr.find("arxiv.org/pdf") >= 0 :
+                  self.article['url_pdf'] = candstr
+
+
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_ri'):
                 # There are (at least) two formats here. In the first
                 # one, we have a link, e.g.:
