@@ -336,7 +336,7 @@ class ScholarArticle(object):
                 res.append(fmt % (item[1], item[0]))
         return '\n'.join(res)
 
-    def as_csv(self, header=False, sep='|'):
+    def as_csv(self, header=False, sep=','):
         # Get keys sorted in specified order:
         keys = [pair[0] for pair in \
                 sorted([(key, val[2]) for key, val in list(self.attrs.items())],
@@ -1132,7 +1132,7 @@ def txt(querier, with_globals):
     for art in articles:
         print(encode(art.as_txt()) + '\n')
 
-def csv(querier, header=False, sep='|'):
+def csv(querier, header=False, sep=','):
     articles = querier.articles
     for art in articles:
         result = art.as_csv(header=header, sep=sep)
@@ -1200,7 +1200,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     group.add_option('--txt-globals', action='store_true',
                      help='Like --txt, but first print global results too')
     group.add_option('--csv', action='store_true',
-                     help='Print article data in CSV form (separator is "|")')
+                     help='Print article data in CSV form (separator is ",")')
     group.add_option('--csv-header', action='store_true',
                      help='Like --csv, but print header with column names')
     group.add_option('--citation', metavar='FORMAT', default=None,
