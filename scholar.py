@@ -286,17 +286,18 @@ class ScholarArticle(object):
         # value, (2) a user-suitable label for the item, and (3) an
         # ordering index:
         self.attrs = {
-            'title':         [None, 'Title',          0],
-            'url':           [None, 'URL',            1],
-            'year':          [None, 'Year',           2],
-            'num_citations': [0,    'Citations',      3],
-            'num_versions':  [0,    'Versions',       4],
-            'cluster_id':    [None, 'Cluster ID',     5],
-            'url_pdf':       [None, 'PDF link',       6],
-            'url_citations': [None, 'Citations list', 7],
-            'url_versions':  [None, 'Versions list',  8],
-            'url_citation':  [None, 'Citation link',  9],
-            'excerpt':       [None, 'Excerpt',       10],
+            'title':           [None, 'Title',          0],
+            'url':             [None, 'URL',            1],
+            'year':            [None, 'Year',           2],
+            'num_citations':   [0,    'Citations',      3],
+            'num_versions':    [0,    'Versions',       4],
+            'cluster_id':      [None, 'Cluster ID',     5],
+            'url_pdf':         [None, 'PDF link',       6],
+            'url_citations':   [None, 'Citations list', 7],
+            'url_versions':    [None, 'Versions list',  8],
+            'url_citation':    [None, 'Citation link',  9],
+            'excerpt':         [None, 'Excerpt',       10],
+            'related_articles':[None, 'Related articles',11],
         }
 
         # The citation data in one of the standard export formats,
@@ -473,6 +474,11 @@ class ScholarArticleParser(object):
                 for arg in args.split('&'):
                     if arg.startswith('cites='):
                         self.article['cluster_id'] = arg[6:]
+			# Newly Added code : Suman Kashyap
+			# Finding related articles URL:
+            if tag.get('href').startswith('/scholar?q=related:'):
+                self.article['related_articles'] = \
+                    self._strip_url_arg('num', self._path2url(tag.get('href')))
 
             if tag.get('href').startswith('/scholar?cluster'):
                 if hasattr(tag, 'string') and tag.string.startswith('All '):
