@@ -879,7 +879,7 @@ class ScholarSettings(object):
 
     def __init__(self):
         self.citform = 0 # Citation format, default none
-        self.per_page_results = None
+        self.per_page_results = 10
         self._is_configured = False
 
     def set_citation_format(self, citform):
@@ -1035,7 +1035,7 @@ class ScholarQuerier(object):
         """
         self.send_query(query)
 
-        if self.articles[0]['url_citations'] is None:
+        if len(self.articles)==0 or self.articles[0]['url_citations'] is None:
             return 
         citations_url=self.articles[0]['url_citations']
         self.clear_articles()
