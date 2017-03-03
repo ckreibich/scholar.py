@@ -6,58 +6,7 @@ page. It is not a recursive crawler.
 """
 
 
-# 2.1:  Additional features:
-#
-#       - Improved cookie support: the new --cookie-file options
-#         allows the reuse of a cookie across invocations of the tool;
-#         this allows higher query rates than would otherwise result
-#         when invoking scholar.py repeatedly.
-#
-#       - Workaround: remove the num= URL-encoded argument from parsed
-#         URLs. For some reason, Google Scholar decides to propagate
-#         the value from the original query into the URLs embedded in
-#         the results.
-#
-# 2.0:  Thorough overhaul of design, with substantial improvements:
-#
-#       - Full support for advanced search arguments provided by
-#         Google Scholar
-#
-#       - Support for retrieval of external citation formats, such as
-#         BibTeX or EndNote
-#
-#       - Simple logging framework to track activity during execution
-#
-# 1.7:  Python 3 and BeautifulSoup 4 compatibility, as well as printing
-#       of usage info when no options are given. Thanks to Pablo
-#       Oliveira (https://github.com/pablooliveira)!
-#
-#       Also a bunch of pylinting and code cleanups.
-#
-# 1.6:  Cookie support, from Matej Smid (https://github.com/palmstrom).
-#
-# 1.5:  A few changes:
-#
-#       - Tweak suggested by Tobias Isenberg: use unicode during CSV
-#         formatting.
-#
-#       - The option -c|--count now understands numbers up to 100 as
-#         well. Likewise suggested by Tobias.
-#
-#       - By default, text rendering mode is now active. This avoids
-#         confusion when playing with the script, as it used to report
-#         nothing when the user didn't select an explicit output mode.
-#
-# 1.4:  Updates to reflect changes in Scholar's page rendering,
-#       contributed by Amanda Hay at Tufts -- thanks!
-#
-# 1.3:  Updates to reflect changes in Scholar's page rendering.
-#
-# 1.2:  Minor tweaks, mostly thanks to helpful feedback from Dan Bolser.
-#       Thanks Dan!
-#
-# 1.1:  Made author field explicit, added --author option.
-#
+
 # Don't complain about missing docstrings: pylint: disable-msg=C0111
 #
 # Copyright 2010--2017 Christian Kreibich. All rights reserved.
