@@ -5,6 +5,9 @@ import sys
 import warnings
 import json
 import pdb
+import types
+import time
+
 
 try:
     # Try importing for Python 3
@@ -556,7 +559,11 @@ class CitesScholarQuery(ScholarQuery):
    SCHOLAR_CITES_URL = ScholarConf.SCHOLAR_SITE + '/scholar?'\
        + 'start=%(resultStartNumber)s'\
        + '&cites=%(cites)s' \
+       + '&as_sdt=40000005'\
+       + '&sciodt=0,22' \
+       +  '&btnG=&hl=en' \
        + '%(num)s'
+       
    
    def __init__(self, cites=None):
         ScholarQuery.__init__(self)
@@ -586,7 +593,6 @@ class CitesScholarQuery(ScholarQuery):
         # server will not recognize them:
         urlargs['num'] = ('&num=%d' % self.num_results
                           if self.num_results is not None else '')
-
         return self.SCHOLAR_CITES_URL % urlargs   
         
 class ClusterScholarQuery(ScholarQuery):
@@ -755,8 +761,9 @@ class SearchScholarQuery(ScholarQuery):
         # server will not recognize them:
         urlargs['num'] = ('&num=%d' % self.num_results
                           if self.num_results is not None else '')
-
+        
         return (self.SCHOLAR_QUERY_URL % urlargs)
+        
 
 
 class ScholarSettings(object):
@@ -912,9 +919,6 @@ class ScholarQuerier(object):
         
         self.clear_articles()
         self.query = query
-        self.diction={}
-        self.jour=0
-        self.conf=0
         self.list=[]
         startSearchNumber = 0
         scholarResults    = ScholarConf.MAX_RESULTS
@@ -923,18 +927,14 @@ class ScholarQuerier(object):
           html = self._get_http_response(url=query.get_url(startSearchNumber),
                                          log_msg='dump of query response HTML',
                                          err_msg='results retrieval failed') 
-          
           if html is None:
               return
+          
           self.parse(html)
           
           startSearchNumber += self.query.num_results_per_page
           scholarResults     =  ScholarConf.MAX_RESULTS 
-                           
           
-          
-        
-
     def get_citation_data(self, article):
         """
         Given an article, retrieves citation link. Note, this requires that
@@ -951,27 +951,12 @@ class ScholarQuerier(object):
                                        log_msg='citation data response',
                                        err_msg='requesting citation data failed')
         
-        if data is None:
+        if data is None:    #bytes
             return False
-        
-        
-     
-        a = data.decode().split('\n')
-        
-        
-        for m in a:
-            if "journal" in m:
-               self.jour=self.jour+1
-               if m not in self.diction:
-                  self.diction[m]= self.diction.get(m,0)+1
-            elif "booktitle" in m:
-               self.conf= self.conf+1
-               if m not in self.diction:
-                  self.diction[m]= self.diction.get(m,0)+1
-            elif "title" in m:
-               self.list.append(m)
-                
-        
+            
+        data1=data.decode()
+        self.list.append(data1)
+ 
         article.set_citation_data(data)
         return True
 
@@ -1010,6 +995,7 @@ class ScholarQuerier(object):
         """
         Helper method, sends HTTP request and returns response payload.
         """
+        
         if log_msg is None:
             log_msg = 'HTTP response data follow'
         if err_msg is None:
@@ -1019,7 +1005,6 @@ class ScholarQuerier(object):
             req = Request(url=url, headers={'User-Agent': ScholarConf.USER_AGENT})
             hdl = self.opener.open(req)
             html = hdl.read()
-          
             
             ScholarUtils.log('debug', log_msg)
             ScholarUtils.log('debug', '>>>>' + '-'*68)
@@ -1066,26 +1051,17 @@ def csv(querier, header=False, sep='|'):
         result = art.as_csv(header=header, sep=sep)
         print(encode(result))
         header = False
-
+        
 def store(data,file_name):
     with open(file_name, 'w') as json_file:
         json_file.write(json.dumps(data))
-
+        
 def citation_export(querier):
     articles = querier.articles
-    
+    store(querier.list,"bibtex.json")
     for art in articles:
         print (encode(art.as_citation()) +'\n')
-    
-    print (querier.diction)
-    print ("the number of journal is:",querier.jour)
-    store(querier.diction,'journal.json')
-    print (querier.list)
-    print ("the number of conference is:",querier.conf)
-    store(querier.list,'title.json')
-    
-    
-
+ 
 
 def main():
     usage = """scholar.py [options] <query string>
