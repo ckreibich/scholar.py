@@ -1142,7 +1142,7 @@ def csv(querier, header=False, sep='|'):
 def citation_export(querier):
     articles = querier.articles
     for art in articles:
-        print(art.as_citation() + '\n')
+        print(art.as_citation().decode('ascii'))
 
 
 def main():
