@@ -759,7 +759,8 @@ class SearchScholarQuery(ScholarQuery):
         + '&btnG=&hl=en' \
         + '%(num)s' \
         + '&as_sdt=%(patents)s%%2C5' \
-        + '&start=%(start)s'
+        + '&start=%(start)s' \
+        + '&scisbd=%(sortby)s'
 
     def __init__(self):
         ScholarQuery.__init__(self)
@@ -775,6 +776,7 @@ class SearchScholarQuery(ScholarQuery):
         self.include_patents = True
         self.include_citations = True
         self.start = 0
+        self.sort_by_date = False
 
     def set_words(self, words):
         """Sets words that *all* must be found in the result."""
@@ -827,6 +829,10 @@ class SearchScholarQuery(ScholarQuery):
     def set_start_index(self, index):
         self.start = index
 
+    def set_sort_by_date(self, yesorno):
+        self.sort_by_date = yesorno
+
+
     def get_url(self):
         if self.words is None and self.words_some is None \
            and self.words_none is None and self.phrase is None \
@@ -858,7 +864,8 @@ class SearchScholarQuery(ScholarQuery):
                    'yhi': self.timeframe[1] or '',
                    'patents': '0' if self.include_patents else '1',
                    'citations': '0' if self.include_citations else '1',
-                   'start': self.start or '0'}
+                   'start': self.start or '0',
+                   'sortby': '1' if self.sort_by_date else '0'}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
@@ -1199,6 +1206,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Maximum number of results')
     group.add_option('-r', '--start', type='int', default=None,
                      help='Begin with the result at a particular index [zero-indexed]')
+    group.add_option('-e', '--date', action='store_true', default=False,
+                     help='Sort by date instead of relevance')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Output format',
@@ -1295,6 +1304,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
             query.set_include_citations(False)
         if options.start:
             query.set_start_index(options.start)
+        if options.date:
+            query.set_sort_by_date(True)
 
     if options.count is not None:
         options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
