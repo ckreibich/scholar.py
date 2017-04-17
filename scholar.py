@@ -893,8 +893,7 @@ class ScholarSettings(object):
     def set_per_page_results(self, per_page_results):
         self.per_page_results = ScholarUtils.ensure_int(
             per_page_results, 'page results must be integer')
-        self.per_page_results = min(
-            self.per_page_results, ScholarConf.MAX_PAGE_RESULTS)
+        self.per_page_results = min(self.per_page_results, ScholarConf.MAX_PAGE_RESULTS)
         self._is_configured = True
 
     def is_configured(self):
