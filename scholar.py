@@ -239,7 +239,7 @@ class ScholarConf(object):
     """Helper class for global settings."""
 
     VERSION = '2.10'
-    LOG_LEVEL = 1
+    LOG_LEVEL = 3
     MAX_PAGE_RESULTS = 10 # Current default for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
 
@@ -353,7 +353,7 @@ class ScholarArticle(object):
         if you have configured the querier to retrieve a particular
         citation export format. (See ScholarSettings.)
         """
-        return self.citation_data or ''
+        return self.citation_data.decode("utf-8", "strict")  or ''
 
 
 class ScholarArticleParser(object):
@@ -512,7 +512,7 @@ class ScholarArticleParser(object):
 
     def _path2url(self, path):
         """Helper, returns full URL in case path isn't one."""
-        if path.startswith('http://'):
+        if path.startswith('http://') or path.startswith('https://'):
             return path
         if not path.startswith('/'):
             path = '/' + path
@@ -982,7 +982,7 @@ class ScholarQuerier(object):
         # to Google.
         soup = SoupKitchen.make_soup(html)
 
-        tag = soup.find(name='form', attrs={'id': 'gs_settings_form'})
+        tag = soup.find(name='form', attrs={'id': 'gs_bdy_frm'})
         if tag is None:
             ScholarUtils.log('info', 'parsing settings failed: no form')
             return False
