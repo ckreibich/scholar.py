@@ -239,7 +239,7 @@ class ScholarConf(object):
     """Helper class for global settings."""
 
     VERSION = '2.10'
-    LOG_LEVEL = 3
+    LOG_LEVEL = 2
     MAX_PAGE_RESULTS = 10 # Current default for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
 
@@ -335,6 +335,9 @@ class ScholarArticle(object):
             if item[0] is not None:
                 res.append(fmt % (item[1], item[0]))
         return '\n'.join(res)
+
+    def as_json(self):
+        return { key: self.attrs[key][0] for key in self.attrs.keys() }
 
     def as_csv(self, header=False, sep='|'):
         # Get keys sorted in specified order:
@@ -1131,6 +1134,9 @@ def txt(querier, with_globals):
     articles = querier.articles
     for art in articles:
         print(encode(art.as_txt()) + '\n')
+
+def json(querier):
+    return [art.as_json() for art in querier.articles]
 
 def csv(querier, header=False, sep='|'):
     articles = querier.articles
