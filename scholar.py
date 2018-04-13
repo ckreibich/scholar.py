@@ -512,7 +512,7 @@ class ScholarArticleParser(object):
 
     def _path2url(self, path):
         """Helper, returns full URL in case path isn't one."""
-        if path.startswith('http://'):
+        if path.startswith('http://') or path.startswith('https://'):
             return path
         if not path.startswith('/'):
             path = '/' + path
