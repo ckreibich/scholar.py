@@ -7,6 +7,11 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.12  Recursively retrieve entries if request more than 10 entries
+#       (recursive crawler). Add JSON output format. Use https rather
+#       than http protocol. Add machaerus' settings and displaying
+#       citations fixes and author list (partial)
+#
 # 2.11  The Scholar site seems to have become more picky about the
 #       number of results requested. The default of 20 in scholar.py
 #       could cause HTTP 503 responses. scholar.py now doesn't request
@@ -136,6 +141,7 @@ page. It is not a recursive crawler.
 # Don't complain about missing docstrings: pylint: disable-msg=C0111
 #
 # Copyright 2010--2017 Christian Kreibich. All rights reserved.
+# Copyright 2018 Michaël Bekaert (release 2.12). All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
@@ -165,6 +171,7 @@ import optparse
 import os
 import re
 import sys
+import json
 import warnings
 
 try:
@@ -192,12 +199,12 @@ except ImportError:
 
 # Support unicode in both Python 2 and 3. In Python 3, unicode is str.
 if sys.version_info[0] == 3:
-    unicode = str # pylint: disable-msg=W0622
-    encode = lambda s: unicode(s) # pylint: disable-msg=C0103
+    unicode = str  # pylint: disable-msg=W0622
+    encode = lambda s: unicode(s)  # pylint: disable-msg=C0103
 else:
     def encode(s):
         if isinstance(s, basestring):
-            return s.encode('utf-8') # pylint: disable-msg=C0103
+            return s.encode('utf-8')  # pylint: disable-msg=C0103
         else:
             return str(s)
 
@@ -235,21 +242,21 @@ class SoupKitchen(object):
 
         return BeautifulSoup(markup)
 
+
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.10'
+    VERSION = '2.12'
     LOG_LEVEL = 1
-    MAX_PAGE_RESULTS = 10 # Current default for per-page results
-    SCHOLAR_SITE = 'http://scholar.google.com'
+    MAX_PAGE_RESULTS = 10  # Current default for per-page results
+    SCHOLAR_SITE = 'https://scholar.google.com'
 
-    # USER_AGENT = 'Mozilla/5.0 (X11; U; FreeBSD i386; en-US; rv:1.9.2.9) Gecko/20100913 Firefox/3.6.9'
-    # Let's update at this point (3/14):
-    USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:27.0) Gecko/20100101 Firefox/27.0'
-
+    # Let's update at this point (10/18):
+    USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:62.0) Gecko/20100101 Firefox/62.0'
     # If set, we will use this file to read/save cookies to enable
     # cookie use across sessions.
     COOKIE_JAR_FILE = None
+
 
 class ScholarUtils(object):
     """A wrapper for various utensils that come in handy."""
@@ -297,6 +304,7 @@ class ScholarArticle(object):
             'url_versions':  [None, 'Versions list',  8],
             'url_citation':  [None, 'Citation link',  9],
             'excerpt':       [None, 'Excerpt',       10],
+            'authors':       [None, 'Authors',       11],
         }
 
         # The citation data in one of the standard export formats,
@@ -336,9 +344,12 @@ class ScholarArticle(object):
                 res.append(fmt % (item[1], item[0]))
         return '\n'.join(res)
 
+    def as_json(self):
+        return {key: self.attrs[key][0] for key in self.attrs.keys()}
+
     def as_csv(self, header=False, sep='|'):
         # Get keys sorted in specified order:
-        keys = [pair[0] for pair in \
+        keys = [pair[0] for pair in
                 sorted([(key, val[2]) for key, val in list(self.attrs.items())],
                        key=lambda pair: pair[1])]
         res = []
@@ -353,7 +364,7 @@ class ScholarArticle(object):
         if you have configured the querier to retrieve a particular
         citation export format. (See ScholarSettings.)
         """
-        return self.citation_data or ''
+        return self.citation_data.decode('utf-8', 'strict') or ''
 
 
 class ScholarArticleParser(object):
@@ -484,11 +495,10 @@ class ScholarArticleParser(object):
             if tag.getText().startswith('Import'):
                 self.article['url_citation'] = self._path2url(tag.get('href'))
 
-
     @staticmethod
     def _tag_has_class(tag, klass):
         """
-        This predicate function checks whether a BeatifulSoup Tag instance
+        This predicate function checks whether a BeautifulSoup Tag instance
         has a class attribute.
         """
         res = tag.get('class') or []
@@ -512,7 +522,7 @@ class ScholarArticleParser(object):
 
     def _path2url(self, path):
         """Helper, returns full URL in case path isn't one."""
-        if path.startswith('http://'):
+        if path.startswith('http://') or path.startswith('https://'):
             return path
         if not path.startswith('/'):
             path = '/' + path
@@ -609,6 +619,11 @@ class ScholarArticleParser120726(ScholarArticleParser):
                 if tag.find('div', {'class': 'gs_a'}):
                     year = self.year_re.findall(tag.find('div', {'class': 'gs_a'}).text)
                     self.article['year'] = year[0] if len(year) > 0 else None
+
+                    authors = tag.find('div', class_='gs_a')
+                    authors = authors.get_text()
+                    authors = re.sub(r"-.*", "", authors)
+                    self.article['authors'] = [e.strip() for e in authors.split(', ')]
 
                 if tag.find('div', {'class': 'gs_fl'}):
                     self._parse_links(tag.find('div', {'class': 'gs_fl'}))
@@ -727,7 +742,7 @@ class ClusterScholarQuery(ScholarQuery):
         if self.cluster is None:
             raise QueryArgumentError('cluster query needs cluster ID')
 
-        urlargs = {'cluster': self.cluster }
+        urlargs = {'cluster': self.cluster}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
@@ -746,7 +761,8 @@ class SearchScholarQuery(ScholarQuery):
     configure on the Scholar website, in the advanced search options.
     """
     SCHOLAR_QUERY_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
-        + 'as_q=%(words)s' \
+        + 'start=%(start)s' \
+        + '&as_q=%(words)s' \
         + '&as_epq=%(phrase)s' \
         + '&as_oq=%(words_some)s' \
         + '&as_eq=%(words_none)s' \
@@ -758,21 +774,24 @@ class SearchScholarQuery(ScholarQuery):
         + '&as_vis=%(citations)s' \
         + '&btnG=&hl=en' \
         + '%(num)s' \
+        + '&scisbd=%(sortby)s' \
         + '&as_sdt=%(patents)s%%2C5'
 
     def __init__(self):
         ScholarQuery.__init__(self)
         self._add_attribute_type('num_results', 'Results', 0)
-        self.words = None # The default search behavior
-        self.words_some = None # At least one of those words
-        self.words_none = None # None of these words
+        self.start = None
+        self.words = None  # The default search behavior
+        self.words_some = None  # At least one of those words
+        self.words_none = None  # None of these words
         self.phrase = None
-        self.scope_title = False # If True, search in title only
+        self.scope_title = False  # If True, search in title only
         self.author = None
         self.pub = None
         self.timeframe = [None, None]
         self.include_patents = True
         self.include_citations = True
+        self.sort_by_date = False
 
     def set_words(self, words):
         """Sets words that *all* must be found in the result."""
@@ -789,6 +808,10 @@ class SearchScholarQuery(ScholarQuery):
     def set_phrase(self, phrase):
         """Sets phrase that must be found in the result exactly."""
         self.phrase = phrase
+
+    def set_start(self, start):
+        """Sets starling location for multiple page search."""
+        self.start = start
 
     def set_scope(self, title_only):
         """
@@ -822,6 +845,9 @@ class SearchScholarQuery(ScholarQuery):
     def set_include_patents(self, yesorno):
         self.include_patents = yesorno
 
+    def set_sort_by_date(self, yesorno):
+        self.sort_by_date = yesorno
+
     def get_url(self):
         if self.words is None and self.words_some is None \
            and self.words_none is None and self.phrase is None \
@@ -831,7 +857,7 @@ class SearchScholarQuery(ScholarQuery):
 
         # If we have some-words or none-words lists, we need to
         # process them so GS understands them. For simple
-        # space-separeted word lists, there's nothing to do. For lists
+        # space-separated word lists, there's nothing to do. For lists
         # of phrases we have to ensure quotations around the phrases,
         # separating them by whitespace.
         words_some = None
@@ -842,7 +868,8 @@ class SearchScholarQuery(ScholarQuery):
         if self.words_none:
             words_none = self._parenthesize_phrases(self.words_none)
 
-        urlargs = {'words': self.words or '',
+        urlargs = {'start': self.start if self.start is not None else '',
+                   'words': self.words or '',
                    'words_some': words_some or '',
                    'words_none': words_none or '',
                    'phrase': self.phrase or '',
@@ -852,7 +879,8 @@ class SearchScholarQuery(ScholarQuery):
                    'ylo': self.timeframe[0] or '',
                    'yhi': self.timeframe[1] or '',
                    'patents': '0' if self.include_patents else '1',
-                   'citations': '0' if self.include_citations else '1'}
+                   'citations': '0' if self.include_citations else '1',
+                   'sortby': '1' if self.sort_by_date else '0'}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
@@ -878,7 +906,7 @@ class ScholarSettings(object):
     CITFORM_BIBTEX = 4
 
     def __init__(self):
-        self.citform = 0 # Citation format, default none
+        self.citform = 0  # Citation format, default none
         self.per_page_results = None
         self._is_configured = False
 
@@ -953,10 +981,10 @@ class ScholarQuerier(object):
                 ScholarUtils.log('info', 'loaded cookies file')
             except Exception as msg:
                 ScholarUtils.log('warn', 'could not load cookies file: %s' % msg)
-                self.cjar = MozillaCookieJar() # Just to be safe
+                self.cjar = MozillaCookieJar()  # Just to be safe
 
         self.opener = build_opener(HTTPCookieProcessor(self.cjar))
-        self.settings = None # Last settings object, if any
+        self.settings = None  # Last settings object, if any
 
     def apply_settings(self, settings):
         """
@@ -982,12 +1010,12 @@ class ScholarQuerier(object):
         # to Google.
         soup = SoupKitchen.make_soup(html)
 
-        tag = soup.find(name='form', attrs={'id': 'gs_settings_form'})
+        tag = soup.find(name='form', attrs={'id': 'gs_bdy_frm'})
         if tag is None:
             ScholarUtils.log('info', 'parsing settings failed: no form')
             return False
 
-        tag = tag.find('input', attrs={'type':'hidden', 'name':'scisig'})
+        tag = tag.find('input', attrs={'type': 'hidden', 'name': 'scisig'})
         if tag is None:
             ScholarUtils.log('info', 'parsing settings failed: scisig')
             return False
@@ -1003,7 +1031,7 @@ class ScholarQuerier(object):
 
         html = self._get_http_response(url=self.SET_SETTINGS_URL % urlargs,
                                        log_msg='dump of settings result HTML',
-                                       err_msg='applying setttings failed')
+                                       err_msg='applying settings failed')
         if html is None:
             return False
 
@@ -1018,7 +1046,8 @@ class ScholarQuerier(object):
         self.clear_articles()
         self.query = query
 
-        html = self._get_http_response(url=query.get_url(),
+        url = query.get_url()
+        html = self._get_http_response(url=url,
                                        log_msg='dump of query response HTML',
                                        err_msg='results retrieval failed')
         if html is None:
@@ -1080,10 +1109,10 @@ class ScholarQuerier(object):
 
     def _get_http_response(self, url, log_msg=None, err_msg=None):
         """
-        Helper method, sends HTTP request and returns response payload.
+        Helper method, sends HTTPS request and returns response payload.
         """
         if log_msg is None:
-            log_msg = 'HTTP response data follow'
+            log_msg = 'HTTPS response data follow'
         if err_msg is None:
             err_msg = 'request failed'
         try:
@@ -1098,7 +1127,7 @@ class ScholarQuerier(object):
             ScholarUtils.log('debug', 'url: %s' % hdl.geturl())
             ScholarUtils.log('debug', 'result: %s' % hdl.getcode())
             ScholarUtils.log('debug', 'headers:\n' + str(hdl.info()))
-            ScholarUtils.log('debug', 'data:\n' + html.decode('utf-8')) # For Python 3
+            ScholarUtils.log('debug', 'data:\n' + html.decode('utf-8'))  # For Python 3
             ScholarUtils.log('debug', '<<<<' + '-'*68)
 
             return html
@@ -1126,11 +1155,17 @@ def txt(querier, with_globals):
             if item[0] is not None:
                 print(fmt % (item[1], item[0]))
         if len(items) > 0:
-            print
+            print()
 
     articles = querier.articles
     for art in articles:
         print(encode(art.as_txt()) + '\n')
+
+
+def json(querier):
+    for art in querier.articles:
+        print(art.as_json())
+
 
 def csv(querier, header=False, sep='|'):
     articles = querier.articles
@@ -1139,10 +1174,11 @@ def csv(querier, header=False, sep='|'):
         print(encode(result))
         header = False
 
+
 def citation_export(querier):
     articles = querier.articles
     for art in articles:
-        print(art.as_citation() + '\n')
+        print(art.as_citation().decode('ascii'))
 
 
 def main():
@@ -1191,6 +1227,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not search, just use articles in given cluster ID')
     group.add_option('-c', '--count', type='int', default=None,
                      help='Maximum number of results')
+    group.add_option('--date', action='store_true', default=False,
+                     help='Sort by date instead of relevance')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Output format',
@@ -1201,6 +1239,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Like --txt, but first print global results too')
     group.add_option('--csv', action='store_true',
                      help='Print article data in CSV form (separator is "|")')
+    group.add_option('--json', action='store_true',
+                     help='Print article data in JSON from')
     group.add_option('--csv-header', action='store_true',
                      help='Like --csv, but print header with column names')
     group.add_option('--citation', metavar='FORMAT', default=None,
@@ -1285,26 +1325,44 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
             query.set_include_patents(False)
         if options.no_citations:
             query.set_include_citations(False)
+        if options.date:
+            query.set_sort_by_date(True)
 
+    article_retrieved = 0
     if options.count is not None:
-        options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
-        query.set_num_page_results(options.count)
-
-    querier.send_query(query)
-
-    if options.csv:
-        csv(querier)
-    elif options.csv_header:
-        csv(querier, header=True)
-    elif options.citation is not None:
-        citation_export(querier)
+        article_expected = options.count
     else:
-        txt(querier, with_globals=options.txt_globals)
+        article_expected = ScholarConf.MAX_PAGE_RESULTS
+
+    while article_retrieved < article_expected:
+        options.count = min(article_expected-article_retrieved, ScholarConf.MAX_PAGE_RESULTS)
+        query.set_num_page_results(options.count)
+        if article_retrieved > 0:
+            query.set_start(article_retrieved)
+
+        querier.send_query(query)
+
+        if options.csv:
+            csv(querier)
+        elif options.csv_header:
+            csv(querier, header=True)
+        if options.json:
+            json(querier)
+        elif options.citation is not None:
+            citation_export(querier)
+        else:
+            txt(querier, with_globals=options.txt_globals)
+
+        article_retrieved += len(querier.articles)
+
+        if len(querier.articles) < options.count:
+            break
 
     if options.cookie_file:
         querier.save_cookies()
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
