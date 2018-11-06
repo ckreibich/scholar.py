@@ -249,7 +249,7 @@ class ScholarConf(object):
     VERSION = '2.12'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 10  # Current default for per-page results
-    SCHOLAR_SITE = 'https://scholar.google.com'
+    SCHOLAR_SITE = 'http://scholar.google.com'
 
     # Let's update at this point (10/18):
     USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:62.0) Gecko/20100101 Firefox/62.0'
@@ -725,11 +725,21 @@ class ClusterScholarQuery(ScholarQuery):
         + 'cluster=%(cluster)s' \
         + '%(num)s'
 
+    SCHOLAR_CITES_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
+        + 'start=%(start)s' \
+        + '&cites=%(cites)s' \
+        + '&hl=en' \
+        + '&scisbd=%(sortby)s' \
+        + '%(num)s'
+
     def __init__(self, cluster=None):
         ScholarQuery.__init__(self)
         self._add_attribute_type('num_results', 'Results', 0)
         self.cluster = None
         self.set_cluster(cluster)
+        self.history = False
+        self.start = None
+        self.sort_by_date = False
 
     def set_cluster(self, cluster):
         """
@@ -738,11 +748,27 @@ class ClusterScholarQuery(ScholarQuery):
         msg = 'cluster ID must be numeric'
         self.cluster = ScholarUtils.ensure_int(cluster, msg)
 
+    def set_start(self, start):
+        """Sets starling location for multiple page search."""
+        self.start = start
+
+    def set_history(self, yesorno):
+        """Sets citation history on."""
+        self.history = yesorno
+
+    def set_sort_by_date(self, yesorno):
+        self.sort_by_date = yesorno
+
     def get_url(self):
         if self.cluster is None:
             raise QueryArgumentError('cluster query needs cluster ID')
 
-        urlargs = {'cluster': self.cluster}
+        if self.history:
+            urlargs = {'start': self.start if self.start is not None else '',
+                       'cites': self.cluster,
+                       'sortby': '1' if self.sort_by_date else '0'}
+        else:
+            urlargs = {'cluster': self.cluster}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
@@ -752,7 +778,10 @@ class ClusterScholarQuery(ScholarQuery):
         urlargs['num'] = ('&num=%d' % self.num_results
                           if self.num_results is not None else '')
 
-        return self.SCHOLAR_CLUSTER_URL % urlargs
+        if self.history:
+            return self.SCHOLAR_CITES_URL % urlargs
+        else:
+            return self.SCHOLAR_CLUSTER_URL % urlargs
 
 
 class SearchScholarQuery(ScholarQuery):
@@ -1167,6 +1196,15 @@ def json(querier):
         print(art.as_json())
 
 
+def history(querier):
+    ret = []
+    for art in querier.articles:
+        json = art.as_json()
+        if 'year' in json.keys():
+            ret.append(json['year'])
+    return ret
+
+
 def csv(querier, header=False, sep='|'):
     articles = querier.articles
     for art in articles:
@@ -1245,6 +1283,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Like --csv, but print header with column names')
     group.add_option('--citation', metavar='FORMAT', default=None,
                      help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
+    group.add_option('--history', action='store_true', default=False,
+                     help='report citation history')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Miscellaneous')
@@ -1303,6 +1343,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     if options.cluster_id:
         query = ClusterScholarQuery(cluster=options.cluster_id)
+        if options.history:
+            query.set_history(True)
     else:
         query = SearchScholarQuery()
         if options.author:
@@ -1328,6 +1370,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         if options.date:
             query.set_sort_by_date(True)
 
+    graph = []
     article_retrieved = 0
     if options.count is not None:
         article_expected = options.count
@@ -1342,11 +1385,14 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
         querier.send_query(query)
 
-        if options.csv:
+        if options.history:
+            graph.extend(history(querier))
+            #json(querier)
+        elif options.csv:
             csv(querier)
         elif options.csv_header:
             csv(querier, header=True)
-        if options.json:
+        elif options.json:
             json(querier)
         elif options.citation is not None:
             citation_export(querier)
@@ -1357,6 +1403,16 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
         if len(querier.articles) < options.count:
             break
+
+    if options.history and len(graph) > 0:
+        years = {}
+        for year in graph:
+            years.setdefault(year, 0)
+            years[year] += 1
+        #for year, count in years.items():
+        #    print("{}: {}".format(year, count))
+        print('{\'cluster_id\': \'', options.cluster_id, '\', \'history\': ', sep='', end='')
+        print(years, end='}\n')
 
     if options.cookie_file:
         querier.save_cookies()
