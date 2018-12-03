@@ -172,6 +172,8 @@ import os
 import re
 import sys
 import json
+import time
+import random
 import warnings
 
 try:
@@ -1381,6 +1383,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         options.count = min(article_expected-article_retrieved, ScholarConf.MAX_PAGE_RESULTS)
         query.set_num_page_results(options.count)
         if article_retrieved > 0:
+            print(">Queueing...")
+            time.sleep(random.randrange(2, 10, 1))
             query.set_start(article_retrieved)
 
         querier.send_query(query)
