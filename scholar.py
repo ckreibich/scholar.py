@@ -880,8 +880,7 @@ class SearchScholarQuery(ScholarQuery):
            and self.timeframe[0] is None and self.timeframe[1] is None \
            and self.query is None:
             raise QueryArgumentError('search query needs more parameters')
-
-        print(self.BASE_URL + self.url_query)
+            
         return self.BASE_URL + self.url_query
 
 
