@@ -165,6 +165,7 @@ import optparse
 import os
 import re
 import sys
+from typing import OrderedDict
 import warnings
 
 try:
@@ -745,24 +746,32 @@ class SearchScholarQuery(ScholarQuery):
     This version represents the search query parameters the user can
     configure on the Scholar website, in the advanced search options.
     """
-    SCHOLAR_QUERY_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
-        + 'as_q=%(words)s' \
-        + '&as_epq=%(phrase)s' \
-        + '&as_oq=%(words_some)s' \
-        + '&as_eq=%(words_none)s' \
-        + '&as_occt=%(scope)s' \
-        + '&as_sauthors=%(authors)s' \
-        + '&as_publication=%(pub)s' \
-        + '&as_ylo=%(ylo)s' \
-        + '&as_yhi=%(yhi)s' \
-        + '&as_vis=%(citations)s' \
-        + '&btnG=&hl=en' \
-        + '%(num)s' \
-        + '&as_sdt=%(patents)s%%2C5'
+    BASE_URL = ScholarConf.SCHOLAR_SITE + '/scholar?'
+
+    URL_ARGS = OrderedDict({
+        'offset':      'start',
+        'query':       'q',
+        'words':       'as_q',
+        'phrase':      'as_epq',
+        'word_some':   'as_oq',
+        'words_none':  'as_eq',
+        'scope':       'as_occt',
+        'authors':     'as_sauthors',
+        'pub':         'as_publication',
+        'ylo':         'as_ylo',
+        'yhi':         'as_yhi',
+        'citations':   'as_vis',
+        'btnG':        'btnG',
+        'lang':        'hl',
+        'num_results': 'num',
+        'patents':     'as_sdt'
+    })
 
     def __init__(self):
         ScholarQuery.__init__(self)
         self._add_attribute_type('num_results', 'Results', 0)
+        self.offset = None
+        self.query = None
         self.words = None # The default search behavior
         self.words_some = None # At least one of those words
         self.words_none = None # None of these words
@@ -771,8 +780,50 @@ class SearchScholarQuery(ScholarQuery):
         self.author = None
         self.pub = None
         self.timeframe = [None, None]
+        self.btnG = ''
+        self.lang = 'en'
         self.include_patents = True
         self.include_citations = True
+
+    @property
+    def url_query(self):
+        args = {
+            'offset':      self.offset,
+            'query':       self.query,
+            'words':       self.words,
+            'phrase':      self.phrase,
+            'word_some':   self._parenthesize_phrases(self.words_some) if self.words_some else None,
+            'words_none':  self._parenthesize_phrases(self.words_none) if self.words_none else None,
+            'scope':       self.scope_title,
+            'authors':     self.author,
+            'pub':         self.pub,
+            'ylo':         self.timeframe[0],
+            'yhi':         self.timeframe[1],
+            'citations':   '0' if self.include_citations else '1',
+            'btnG':        self.btnG,
+            'lang':        self.lang,
+            'num_results': self.num_results,
+            'patents':     '%s%%2C5' % '0' if self.include_patents else '1'
+        }
+
+        query = ''
+
+        for key, val in args.items():
+            if val != None:
+                query += '%s=%s&' % (self.URL_ARGS[key], quote(encode(val)))
+        
+        # deleting last '&'
+        query = query[: -1]
+        
+        return query
+
+    def set_offset(self, offset):
+        """"sets offset number. it'll skip first (offset) articles in search."""
+        self.offset = offset
+
+    def set_query(self, query):
+        """"it's what you fill in search box."""
+        self.query = query
 
     def set_words(self, words):
         """Sets words that *all* must be found in the result."""
@@ -826,43 +877,11 @@ class SearchScholarQuery(ScholarQuery):
         if self.words is None and self.words_some is None \
            and self.words_none is None and self.phrase is None \
            and self.author is None and self.pub is None \
-           and self.timeframe[0] is None and self.timeframe[1] is None:
+           and self.timeframe[0] is None and self.timeframe[1] is None \
+           and self.query is None:
             raise QueryArgumentError('search query needs more parameters')
 
-        # If we have some-words or none-words lists, we need to
-        # process them so GS understands them. For simple
-        # space-separeted word lists, there's nothing to do. For lists
-        # of phrases we have to ensure quotations around the phrases,
-        # separating them by whitespace.
-        words_some = None
-        words_none = None
-
-        if self.words_some:
-            words_some = self._parenthesize_phrases(self.words_some)
-        if self.words_none:
-            words_none = self._parenthesize_phrases(self.words_none)
-
-        urlargs = {'words': self.words or '',
-                   'words_some': words_some or '',
-                   'words_none': words_none or '',
-                   'phrase': self.phrase or '',
-                   'scope': 'title' if self.scope_title else 'any',
-                   'authors': self.author or '',
-                   'pub': self.pub or '',
-                   'ylo': self.timeframe[0] or '',
-                   'yhi': self.timeframe[1] or '',
-                   'patents': '0' if self.include_patents else '1',
-                   'citations': '0' if self.include_citations else '1'}
-
-        for key, val in urlargs.items():
-            urlargs[key] = quote(encode(val))
-
-        # The following URL arguments must not be quoted, or the
-        # server will not recognize them:
-        urlargs['num'] = ('&num=%d' % self.num_results
-                          if self.num_results is not None else '')
-
-        return self.SCHOLAR_QUERY_URL % urlargs
+        return self.BASE_URL + self.url_query
 
 
 class ScholarSettings(object):
@@ -1165,6 +1184,10 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     parser = optparse.OptionParser(usage=usage, formatter=fmt)
     group = optparse.OptionGroup(parser, 'Query arguments',
                                  'These options define search query arguments and parameters.')
+    group.add_option('-q', '--query', metavar='QUERY', default=None,
+                     help='Normal search query.')
+    group.add_option('-o', '--offset', metavar='OFFSET', default=None,
+                     help='it\'ll skip first (offset) articles in search.')
     group.add_option('-a', '--author', metavar='AUTHORS', default=None,
                      help='Author name(s)')
     group.add_option('-A', '--all', metavar='WORDS', default=None, dest='allw',
@@ -1265,6 +1288,10 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         query = ClusterScholarQuery(cluster=options.cluster_id)
     else:
         query = SearchScholarQuery()
+        if options.offset:
+            query.set_offset(options.offset)
+        if options.query:
+            query.set_query(options.query)
         if options.author:
             query.set_author(options.author)
         if options.allw:
