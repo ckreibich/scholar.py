@@ -794,7 +794,7 @@ class SearchScholarQuery(ScholarQuery):
             'phrase':      self.phrase,
             'word_some':   self._parenthesize_phrases(self.words_some) if self.words_some else None,
             'words_none':  self._parenthesize_phrases(self.words_none) if self.words_none else None,
-            'scope':       self.scope_title,
+            'scope':       'title' if self.scope_title else 'any',
             'authors':     self.author,
             'pub':         self.pub,
             'ylo':         self.timeframe[0],
@@ -808,9 +808,9 @@ class SearchScholarQuery(ScholarQuery):
 
         query = ''
 
-        for key, val in args.items():
-            if val != None:
-                query += '%s=%s&' % (self.URL_ARGS[key], quote(encode(val)))
+        for key, val in self.URL_ARGS.items():
+            if args[key] != None:
+                query += '%s=%s&' % (val, quote(encode(args[key])))
         
         # deleting last '&'
         query = query[: -1]
@@ -881,6 +881,7 @@ class SearchScholarQuery(ScholarQuery):
            and self.query is None:
             raise QueryArgumentError('search query needs more parameters')
 
+        print(self.BASE_URL + self.url_query)
         return self.BASE_URL + self.url_query
 
 
