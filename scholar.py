@@ -417,7 +417,8 @@ class ScholarArticleParser(object):
             # raw text is a list because the body contains <b> etc
             if raw_text is not None and len(raw_text) > 0:
                 try:
-                    num_results = raw_text[0].split()[1]
+                    # first string after 'about ' is maximum results is founded.
+                    num_results = raw_text[0].lower().split('about ')[1].split()[0]
                     # num_results may now contain commas to separate
                     # thousands, strip:
                     num_results = num_results.replace(',', '')
@@ -1196,7 +1197,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     group = optparse.OptionGroup(parser, 'Query arguments',
                                  'These options define search query arguments and parameters.')
     group.add_option('-q', '--query', metavar='QUERY', default=None,
-                     help='Normal search query. if your query includes double quotes (") replace it by (\\"). and wrap your query in single quotes (\') example: \'portfolio optimization in \\"stock markets\\"\'')
+                     help='Normal search query. if your query includes double quotes (") or single quotes (\') replace it by (\\") and (\\\'). and wrap your query in single quotes (\') example: \'portfolio\\\'s optimization in \\"stock markets\\"\'')
     group.add_option('-o', '--offset', type='int', metavar='OFFSET', default=None,
                      help='it\'ll skip first (offset) articles in search.')
     group.add_option('-a', '--author', metavar='AUTHORS', default=None,
@@ -1356,15 +1357,13 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     
     remaining_to_get = results_num_to_get - len(querier)
 
-    print(sys.argv)
     # if we didn't get enough articles get remaining articles
     while remaining_to_get > 0:
-        print(f'{len(querier)}/{remaining_to_get}')
         sleep(options.delay)
 
         # set offset
         query.offset = offset + len(querier)
-
+        
         # if remaining articles to get is less than max results per page
         if remaining_to_get < ScholarConf.MAX_PAGE_RESULTS:
         # then just get remaining results
@@ -1373,7 +1372,6 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         querier.send_query(query, clear=False)
 
         remaining_to_get = results_num_to_get - len(querier)
-
 
     if options.csv:
         csv(querier)
