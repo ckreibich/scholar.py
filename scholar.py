@@ -1382,7 +1382,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
             break
 
         remaining_to_get = results_num_to_get - len(querier)
-        print(f'remaining: {remaining_to_get}')
+        # print(f'remaining: {remaining_to_get}')
 
     if options.csv:
         csv(querier)
