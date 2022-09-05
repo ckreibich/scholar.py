@@ -1196,8 +1196,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     group = optparse.OptionGroup(parser, 'Query arguments',
                                  'These options define search query arguments and parameters.')
     group.add_option('-q', '--query', metavar='QUERY', default=None,
-                     help='Normal search query.')
-    group.add_option('-o', '--offset', metavar='OFFSET', default=None,
+                     help='Normal search query. if your query includes double quotes (") replace it by (\\"). and wrap your query in single quotes (\') example: \'portfolio optimization in \\"stock markets\\"\'')
+    group.add_option('-o', '--offset', type='int', metavar='OFFSET', default=None,
                      help='it\'ll skip first (offset) articles in search.')
     group.add_option('-a', '--author', metavar='AUTHORS', default=None,
                      help='Author name(s)')
@@ -1231,7 +1231,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='get all results')
     # group.add_option('-c', '--count', type='int', default=None,
                     #  help='Maximum number of results per page')
-                    
+
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Output format',
@@ -1356,9 +1356,12 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     
     remaining_to_get = results_num_to_get - len(querier)
 
+    print(sys.argv)
     # if we didn't get enough articles get remaining articles
     while remaining_to_get > 0:
+        print(f'{len(querier)}/{remaining_to_get}')
         sleep(options.delay)
+
         # set offset
         query.offset = offset + len(querier)
 
@@ -1371,7 +1374,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
         remaining_to_get = results_num_to_get - len(querier)
 
-    print(len(querier))
+
     if options.csv:
         csv(querier)
     elif options.csv_header:
