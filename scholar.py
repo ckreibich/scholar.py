@@ -1363,7 +1363,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
         # set offset
         query.offset = offset + len(querier)
-        
+
         # if remaining articles to get is less than max results per page
         if remaining_to_get < ScholarConf.MAX_PAGE_RESULTS:
         # then just get remaining results
@@ -1371,7 +1371,18 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
         querier.send_query(query, clear=False)
 
+        # if there's a problem in getting articles go out of cycle
+        # it can mean that there's no more articles to get.
+        # or got banned by google! 
+        if results_num_to_get - len(querier) == remaining_to_get:
+            print("WARNING: there's probably a problem for getting all requested articles.")
+            print(f"got {len(querier)} articles out of {results_num_to_get} articles.")
+            print("this means we got banned by google.")
+            print("or maybe there was some unavailable articles.")
+            break
+
         remaining_to_get = results_num_to_get - len(querier)
+        print(f'remaining: {remaining_to_get}')
 
     if options.csv:
         csv(querier)
