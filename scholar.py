@@ -787,6 +787,8 @@ class SearchScholarQuery(ScholarQuery):
 
     @property
     def url_query(self):
+        """this will create query to add to BASE_URL for requesting"""
+
         args = {
             'offset':      self.offset,
             'query':       self.query,
