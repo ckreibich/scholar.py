@@ -1127,6 +1127,12 @@ class ScholarQuerier(object):
             ScholarUtils.log('info', err_msg + ': %s' % err)
             return None
 
+    def __len__(self):
+        return len(self.articles)
+    
+    def __iadd__(self, other):
+        self.articles += other.articles
+        return self
 
 def txt(querier, with_globals):
     if with_globals:
@@ -1214,8 +1220,12 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not include citations in results')
     group.add_option('-C', '--cluster-id', metavar='CLUSTER_ID', default=None,
                      help='Do not search, just use articles in given cluster ID')
-    group.add_option('-c', '--count', type='int', default=None,
-                     help='Maximum number of results')
+    group.add_option('-m', '--max-results', type='int', default=None,
+                     help='Maximum number of results to get, returns all results if is bigger than all results')
+    group.add_option('--all-results', action='store_true', default=False,
+                     help='get all results')
+    # group.add_option('-c', '--count', type='int', default=None,
+                    #  help='Maximum number of results per page')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Output format',
@@ -1315,11 +1325,19 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         if options.no_citations:
             query.set_include_citations(False)
 
-    if options.count is not None:
-        options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
-        query.set_num_page_results(options.count)
+    if options.max_results is not None:
+        # if user wants less than MAX_PAGE_RESULTS articles
+        # set perpage results to max_results
+        if options.max_results < ScholarConf.MAX_PAGE_RESULTS:
+            query.set_num_page_results(options.max_results)
+        # else:
+            
+        # options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
 
     querier.send_query(query)
+
+    # check 
+    
 
     if options.csv:
         csv(querier)
