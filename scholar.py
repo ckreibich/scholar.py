@@ -165,6 +165,7 @@ import optparse
 import os
 import re
 import sys
+from time import sleep
 from typing import OrderedDict
 import warnings
 
@@ -1031,12 +1032,14 @@ class ScholarQuerier(object):
         ScholarUtils.log('info', 'settings applied')
         return True
 
-    def send_query(self, query):
+    def send_query(self, query, clear=True):
         """
         This method initiates a search query (a ScholarQuery instance)
         with subsequent parsing of the response.
         """
-        self.clear_articles()
+        if clear:
+            self.clear_articles()
+
         self.query = query
 
         html = self._get_http_response(url=query.get_url(),
@@ -1222,10 +1225,13 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not search, just use articles in given cluster ID')
     group.add_option('-m', '--max-results', type='int', default=None,
                      help='Maximum number of results to get, returns all results if is bigger than all results')
+    group.add_option('-D', '--delay', type='float', default=2.0,
+                     help='delay for each requests, to not get banned by google because of a DOS attack! default is 2 sec')
     group.add_option('--all-results', action='store_true', default=False,
                      help='get all results')
     # group.add_option('-c', '--count', type='int', default=None,
                     #  help='Maximum number of results per page')
+                    
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Output format',
@@ -1296,6 +1302,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     querier.apply_settings(settings)
 
+
     if options.cluster_id:
         query = ClusterScholarQuery(cluster=options.cluster_id)
     else:
@@ -1327,18 +1334,44 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     if options.max_results is not None:
         # if user wants less than MAX_PAGE_RESULTS articles
-        # set perpage results to max_results
         if options.max_results < ScholarConf.MAX_PAGE_RESULTS:
+            # set perpage results to max_results
             query.set_num_page_results(options.max_results)
-        # else:
-            
-        # options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
 
     querier.send_query(query)
 
-    # check 
-    
+    # offset is number of first articles to skip
+    offset = options.offset if options.offset else 0
 
+    # all available articles
+    all_results_num = query['num_results'] - offset
+
+    # set results number to get
+    if options.all_results:
+        results_num_to_get = all_results_num
+    elif options.max_results:
+        results_num_to_get = min(options.max_results, all_results_num)
+    else:
+        results_num_to_get = len(querier)
+    
+    remaining_to_get = results_num_to_get - len(querier)
+
+    # if we didn't get enough articles get remaining articles
+    while remaining_to_get > 0:
+        sleep(options.delay)
+        # set offset
+        query.offset = offset + len(querier)
+
+        # if remaining articles to get is less than max results per page
+        if remaining_to_get < ScholarConf.MAX_PAGE_RESULTS:
+        # then just get remaining results
+            query.set_num_page_results(remaining_to_get)
+
+        querier.send_query(query, clear=False)
+
+        remaining_to_get = results_num_to_get - len(querier)
+
+    print(len(querier))
     if options.csv:
         csv(querier)
     elif options.csv_header:
