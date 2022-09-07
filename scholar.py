@@ -304,6 +304,7 @@ class ScholarArticle(object):
         # The citation data in one of the standard export formats,
         # e.g. BibTeX.
         self.citation_data = None
+        self.citation_format = None
 
     def __getitem__(self, key):
         if key in self.attrs:
@@ -487,6 +488,42 @@ class ScholarArticleParser(object):
             if tag.getText().startswith('Import'):
                 self.article['url_citation'] = tag.get('href')
 
+    def _parse_bib(self, bib_text):
+        """it'll parse a bibTex citation information and extract it's information"""
+
+        # check if citation data exists
+        if self.article.citation_data is None:
+            return False
+        
+        # bibTex sample:
+        # @article{perold1984large,
+        #     title={Large-scale portfolio optimization},
+        #     author={Perold, Andre F},
+        #     journal={Management science},
+        #     volume={30},
+        #     number={10},
+        #     pages={1143--1160},
+        #     year={1984},
+        #     publisher={INFORMS}
+        # }
+
+        # regexes to get any information
+        bib_regs = {
+            'type': r'@(.*){',
+            'title': r'title=\{(.*)\}',
+            'journal': r'journal=\{(.*)\}',
+            'volume': r'volume=\{(.*)\}',
+            'number': r'number=\{(.*)\}',
+            'pages': r'pages=\{(.*)\}',
+            'publisher': r'publisher=\{(.*)\}'
+        }
+
+        info = {}
+
+        for key, reg in bib_regs.items():
+            info[key] = re.search(reg, bib_text, re.IGNORECASE)
+        
+        return info
 
     @staticmethod
     def _tag_has_class(tag, klass):
