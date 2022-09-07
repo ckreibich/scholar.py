@@ -485,7 +485,7 @@ class ScholarArticleParser(object):
                     self._strip_url_arg('num', self._path2url(tag.get('href')))
 
             if tag.getText().startswith('Import'):
-                self.article['url_citation'] = self._path2url(tag.get('href'))
+                self.article['url_citation'] = tag.get('href')
 
 
     @staticmethod
@@ -1005,7 +1005,8 @@ class ScholarQuerier(object):
         # to Google.
         soup = SoupKitchen.make_soup(html)
 
-        tag = soup.find(name='form', attrs={'id': 'gs_settings_form'})
+        tag = soup.find(name='form', attrs={'id': 'gs_bdy_frm'})
+
         if tag is None:
             ScholarUtils.log('info', 'parsing settings failed: no form')
             return False
@@ -1026,7 +1027,7 @@ class ScholarQuerier(object):
 
         html = self._get_http_response(url=self.SET_SETTINGS_URL % urlargs,
                                        log_msg='dump of settings result HTML',
-                                       err_msg='applying setttings failed')
+                                       err_msg='applying setttings failed')         
         if html is None:
             return False
 
@@ -1068,6 +1069,10 @@ class ScholarQuerier(object):
                                        err_msg='requesting citation data failed')
         if data is None:
             return False
+
+        # data is 
+        if type(data) == bytes:
+            data = data.decode('utf-8') 
 
         article.set_citation_data(data)
         return True
