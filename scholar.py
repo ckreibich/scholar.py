@@ -936,16 +936,25 @@ class ScholarQuerier(object):
     GET_SETTINGS_URL = ScholarConf.SCHOLAR_SITE + '/scholar_settings?' \
         + 'sciifh=1&hl=en&as_sdt=0,5'
 
-    SET_SETTINGS_URL = ScholarConf.SCHOLAR_SITE + '/scholar_setprefs?' \
-        + 'q=' \
-        + '&scisig=%(scisig)s' \
-        + '&inststart=0' \
-        + '&as_sdt=1,5' \
-        + '&as_sdtp=' \
-        + '&num=%(num)s' \
-        + '&scis=%(scis)s' \
-        + '%(scisf)s' \
-        + '&hl=en&lang=all&instq=&inst=569367360547434339&save='
+    # example set setting url :
+    # https://scholar.google.com/scholar_setprefs?inststart=0&scisig=AAGBfm0AAAAAYxisq4fTruxOSf9qjln8EPloukoQ1EtW&xsrf=&num=10&scis=yes&scisf=4&hl=de&lang=all&instq=&boi_access=1&has_boo_access=1&has_casa_opt_in=1&save=
+    BASE_SETTINGS_URL = ScholarConf.SCHOLAR_SITE + '/scholar_setprefs?'
+
+    SETTING_ARGS = OrderedDict({
+        'inststart':       'inststart',
+        'scisig':          'scisig',
+        'xsrf':            'xsrf',
+        'num_results':     'num',
+        'scis':            'scis',
+        'scisf':           'scisf',
+        'lang':            'hl',
+        'art_lang':        'lang',
+        'instq':           'instq',
+        'boi_access':      'boi_access',
+        'has_boo_access':  'has_boo_access',
+        'has_casa_opt_in': 'has_casa_opt_in',
+        'save':            'save'
+    })
 
     # Older URLs:
     # ScholarConf.SCHOLAR_SITE + '/scholar?q=%s&hl=en&btnG=Search&as_sdt=2001&as_sdtp=on
@@ -967,6 +976,21 @@ class ScholarQuerier(object):
         self.query = None
         self.cjar = MozillaCookieJar()
 
+        self.inststart = '0'
+        self.scising = ''
+        self.xsrf = ''
+        self.num = None
+        self.scis = None
+        self.scisf = None
+        self.lang = 'en'
+        self.art_lang = 'all'
+        self.instq = ''
+        self.boi_access = 1
+        self.has_boo_access = 1
+        self.has_casa_opt_in = 1
+        self.boi_access = 1
+        self.save = ''
+
         # If we have a cookie file, load it:
         if ScholarConf.COOKIE_JAR_FILE and \
            os.path.exists(ScholarConf.COOKIE_JAR_FILE):
@@ -980,6 +1004,37 @@ class ScholarQuerier(object):
 
         self.opener = build_opener(HTTPCookieProcessor(self.cjar))
         self.settings = None # Last settings object, if any
+    
+    @property
+    def setting_query(self):
+        """this will create query to add to BASE_SETTING_URL for requesting"""
+
+        args = {
+            'inststart':       self.inststart,
+            'scisig':          self.scising,
+            'xsrf':            self.xsrf,
+            'num_results':     self.num,
+            'scis':            self.scis,
+            'scisf':           self.scisf,
+            'lang':            self.lang,
+            'art_lang':        self.art_lang,
+            'instq':           self.instq,
+            'boi_access':      self.boi_access,
+            'has_boo_access':  self.has_boo_access,
+            'has_casa_opt_in': self.has_casa_opt_in,
+            'save':            self.save
+        }
+
+        query = ''
+
+        for key, val in self.SETTING_ARGS.items():
+            if args[key] != None:
+                query += '%s=%s&' % (val, quote(encode(args[key])))
+        
+        # deleting last '&'
+        query = query[: -1]
+        
+        return query
 
     def apply_settings(self, settings):
         """
@@ -1016,18 +1071,17 @@ class ScholarQuerier(object):
             ScholarUtils.log('info', 'parsing settings failed: scisig')
             return False
 
-        urlargs = {'scisig': tag['value'],
-                   'num': settings.per_page_results,
-                   'scis': 'no',
-                   'scisf': ''}
+        self.scising = tag['value']
+        self.num = settings.per_page_results
+        self.scis = 'no'
 
         if settings.citform != 0:
-            urlargs['scis'] = 'yes'
-            urlargs['scisf'] = '&scisf=%d' % settings.citform
+            self.scis = 'yes'
+            self.scisf = '%d' % settings.citform
 
-        html = self._get_http_response(url=self.SET_SETTINGS_URL % urlargs,
+        html = self._get_http_response(url=self.BASE_SETTINGS_URL + self.setting_query,
                                        log_msg='dump of settings result HTML',
-                                       err_msg='applying setttings failed')         
+                                       err_msg='applying setttings failed')    
         if html is None:
             return False
 
@@ -1070,7 +1124,7 @@ class ScholarQuerier(object):
         if data is None:
             return False
 
-        # data is 
+        # change to str if it's bytes
         if type(data) == bytes:
             data = data.decode('utf-8') 
 
