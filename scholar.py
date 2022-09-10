@@ -163,7 +163,7 @@ page. It is not a recursive crawler.
 
 import optparse
 import os
-from random import randrange
+from random import randrange, uniform
 import re
 import sys
 from time import sleep
@@ -1237,7 +1237,7 @@ class ScholarQuerier(object):
 
     @property
     def delay(self):
-        return randrange(self.delay_range)
+        return uniform(*self.delay_range)
 
     def __len__(self):
         return len(self.articles)
