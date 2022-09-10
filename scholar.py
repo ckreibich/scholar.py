@@ -163,7 +163,7 @@ page. It is not a recursive crawler.
 
 import optparse
 import os
-from random import randrange, uniform
+from random import uniform
 import re
 import sys
 from time import sleep
@@ -1235,7 +1235,7 @@ class ScholarQuerier(object):
 
             # check for robot check!
             if "Please show you&#39;re not a robot" in html.decode('utf-8'):
-                ScholarUtils.log('info', err_msg + ': google recognized you as a robot!')
+                ScholarUtils.log('error', err_msg + ': google recognized you as a robot!')
                 return None
             self.is_first_request = False # apply delay for next request!
 
@@ -1350,8 +1350,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not search, just use articles in given cluster ID')
     group.add_option('-m', '--max-results', type='int', default=None,
                      help='Maximum number of results to get, returns all results if is bigger than all results')
-    group.add_option('-D', '--delay', type='float', default=2.0,
-                     help='maximum delay for each requests (it\'ll be from 0 to maximum-delay seconds), to not get banned by google because of a DOS attack! default is 2 sec')
+    group.add_option('-D', '--delay', type='string', default=(1.0, 2.0),
+                     help='delay range for each requests pass it as : min, max (it\'ll be delay for each request from min to max seconds), to not get banned by google because of a DOS attack! default is 1,2 sec')
     group.add_option('--no-delay', action='store_true', default=False,
                      help='set delay to zero')
     group.add_option('--all-results', action='store_true', default=False,
@@ -1432,9 +1432,9 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     querier.apply_settings(settings)
 
     # add delay if user wants it.
-    if not options.no_delay and options.delay != 0:
-        querier.set_delay(0, options.delay)
-
+    if not options.no_delay and options.delay != (0, 0):
+        options.delay = tuple(float(n) for n in options.delay.split(',')) if type(options.delay) == str else options.delay
+        querier.set_delay(*options.delay)
 
     if options.cluster_id:
         query = ClusterScholarQuery(cluster=options.cluster_id)
@@ -1502,14 +1502,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
         querier.send_query(query, clear=False)
 
-        # if there's a problem in getting articles go out of cycle
         # it can mean that there's no more articles to get.
-        # or got banned by google! 
         if results_num_to_get - len(querier) == remaining_to_get:
-            print("WARNING: there's probably a problem for getting all requested articles.")
-            print(f"got {len(querier)} articles out of {results_num_to_get} articles.")
-            print("this means we got banned by google.")
-            print("or maybe there was some unavailable articles.")
             break
 
         remaining_to_get = results_num_to_get - len(querier)
