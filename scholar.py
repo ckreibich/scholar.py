@@ -163,6 +163,7 @@ page. It is not a recursive crawler.
 
 import optparse
 import os
+from random import randrange
 import re
 import sys
 from time import sleep
@@ -304,7 +305,6 @@ class ScholarArticle(object):
         # The citation data in one of the standard export formats,
         # e.g. BibTeX.
         self.citation_data = None
-        self.citation_format = None
 
     def __getitem__(self, key):
         if key in self.attrs:
@@ -1012,6 +1012,7 @@ class ScholarQuerier(object):
         self.articles = []
         self.query = None
         self.cjar = MozillaCookieJar()
+        self.delay_range = None
 
         self.inststart = '0'
         self.scising = ''
@@ -1222,10 +1223,21 @@ class ScholarQuerier(object):
             ScholarUtils.log('debug', 'data:\n' + html.decode('utf-8')) # For Python 3
             ScholarUtils.log('debug', '<<<<' + '-'*68)
 
+            # delay for not requesting too much and get banned
+            if self.delay_range is not None:
+                sleep(self.delay)
+
             return html
         except Exception as err:
             ScholarUtils.log('info', err_msg + ': %s' % err)
             return None
+
+    def set_delay(self, min_delay, max_delay):
+        self.delay_range = (min_delay, max_delay)
+
+    @property
+    def delay(self):
+        return randrange(self.delay_range)
 
     def __len__(self):
         return len(self.articles)
@@ -1323,7 +1335,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     group.add_option('-m', '--max-results', type='int', default=None,
                      help='Maximum number of results to get, returns all results if is bigger than all results')
     group.add_option('-D', '--delay', type='float', default=2.0,
-                     help='delay for each requests, to not get banned by google because of a DOS attack! default is 2 sec')
+                     help='maximum delay for each requests (it\'ll be from 0 to maximum-delay seconds), to not get banned by google because of a DOS attack! default is 2 sec')
     group.add_option('--all-results', action='store_true', default=False,
                      help='get all results')
     # group.add_option('-c', '--count', type='int', default=None,
@@ -1398,6 +1410,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         return 1
 
     querier.apply_settings(settings)
+    querier.set_delay(0, options.delay)
 
 
     if options.cluster_id:
@@ -1455,7 +1468,6 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     # if we didn't get enough articles get remaining articles
     while remaining_to_get > 0:
-        sleep(options.delay)
 
         # set offset
         query.offset = offset + len(querier)
@@ -1488,7 +1500,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         citation_export(querier)
     else:
         txt(querier, with_globals=options.txt_globals)
-
+        
     if options.cookie_file:
         querier.save_cookies()
 
