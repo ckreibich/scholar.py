@@ -300,6 +300,12 @@ class ScholarArticle(object):
             'url_versions':  [None, 'Versions list',  8],
             'url_citation':  [None, 'Citation link',  9],
             'excerpt':       [None, 'Excerpt',       10],
+            'type':          [None, 'Paper type',    11],
+            'journal':       [None, 'Journal',       12],
+            'publisher':     [None, 'Publisher',     13],
+            'pages':         [None, 'Pages',         14],
+            'volume':        [None, 'Volume',        15],
+            'issue':         [None, 'Issue',         16],
         }
 
         # The citation data in one of the standard export formats,
@@ -507,7 +513,7 @@ class ScholarArticleParser(object):
         #     publisher={INFORMS}
         # }
 
-        # regexes to get any information
+        # regexes to get informations
         bib_regs = {
             'type': r'@(.*){',
             'title': r'title=\{(.*)\}',
@@ -518,10 +524,9 @@ class ScholarArticleParser(object):
             'publisher': r'publisher=\{(.*)\}'
         }
 
-        info = {}
 
         for key, reg in bib_regs.items():
-            info[key] = re.search(reg, bib_text, re.IGNORECASE)
+            self.article[key] = re.search(reg, bib_text, re.IGNORECASE)
         
         return info
 
@@ -1013,6 +1018,7 @@ class ScholarQuerier(object):
         self.query = None
         self.cjar = MozillaCookieJar()
         self.delay_range = None
+        self.is_first_request = True # don't apply delay for first request.
 
         self.inststart = '0'
         self.scising = ''
@@ -1204,6 +1210,10 @@ class ScholarQuerier(object):
         """
         Helper method, sends HTTP request and returns response payload.
         """
+        # delay for not requesting too much and get banned
+        if self.delay_range is not None and not self.is_first_request:
+            sleep(self.delay)
+
         if log_msg is None:
             log_msg = 'HTTP response data follow'
         if err_msg is None:
@@ -1223,9 +1233,7 @@ class ScholarQuerier(object):
             ScholarUtils.log('debug', 'data:\n' + html.decode('utf-8')) # For Python 3
             ScholarUtils.log('debug', '<<<<' + '-'*68)
 
-            # delay for not requesting too much and get banned
-            if self.delay_range is not None:
-                sleep(self.delay)
+            self.is_first_request = False # apply delay for next request!
 
             return html
         except Exception as err:
