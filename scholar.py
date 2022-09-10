@@ -1336,6 +1336,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Maximum number of results to get, returns all results if is bigger than all results')
     group.add_option('-D', '--delay', type='float', default=2.0,
                      help='maximum delay for each requests (it\'ll be from 0 to maximum-delay seconds), to not get banned by google because of a DOS attack! default is 2 sec')
+    group.add_option('--no-delay', action='store_true', default=False,
+                     help='set delay to zero')
     group.add_option('--all-results', action='store_true', default=False,
                      help='get all results')
     # group.add_option('-c', '--count', type='int', default=None,
@@ -1410,7 +1412,10 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         return 1
 
     querier.apply_settings(settings)
-    querier.set_delay(0, options.delay)
+
+    # add delay if user wants it.
+    if not options.no_delay and options.delay != 0:
+        querier.set_delay(0, options.delay)
 
 
     if options.cluster_id:
