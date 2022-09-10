@@ -364,6 +364,42 @@ class ScholarArticle(object):
         """
         return self.citation_data or ''
 
+    def parse_bib(self):
+        """it'll parse a bibTex citation information and extract it's information"""
+
+        # check if citation data exists
+        if self.citation_data is None:
+            return False
+        
+        # bibTex sample:
+        # @article{perold1984large,
+        #     title={Large-scale portfolio optimization},
+        #     author={Perold, Andre F},
+        #     journal={Management science},
+        #     volume={30},
+        #     number={10},
+        #     pages={1143--1160},
+        #     year={1984},
+        #     publisher={INFORMS}
+        # }
+
+        # regexes to get informations
+        bib_regs = {
+            'type': r'@(.*){',
+            'title': r'title=\{(.*)\}',
+            'journal': r'journal=\{(.*)\}',
+            'volume': r'volume=\{(.*)\}',
+            'issue': r'number=\{(.*)\}',
+            'pages': r'pages=\{(.*)\}',
+            'publisher': r'publisher=\{(.*)\}'
+        }
+
+        for key, reg in bib_regs.items():
+            val = re.findall(reg, self.citation_data, re.IGNORECASE)
+            self[key] = val[0] if len(val) > 0 else None
+        
+        return True
+
 
 class ScholarArticleParser(object):
     """
@@ -493,42 +529,6 @@ class ScholarArticleParser(object):
 
             if tag.getText().startswith('Import'):
                 self.article['url_citation'] = tag.get('href')
-
-    def _parse_bib(self, bib_text):
-        """it'll parse a bibTex citation information and extract it's information"""
-
-        # check if citation data exists
-        if self.article.citation_data is None:
-            return False
-        
-        # bibTex sample:
-        # @article{perold1984large,
-        #     title={Large-scale portfolio optimization},
-        #     author={Perold, Andre F},
-        #     journal={Management science},
-        #     volume={30},
-        #     number={10},
-        #     pages={1143--1160},
-        #     year={1984},
-        #     publisher={INFORMS}
-        # }
-
-        # regexes to get informations
-        bib_regs = {
-            'type': r'@(.*){',
-            'title': r'title=\{(.*)\}',
-            'journal': r'journal=\{(.*)\}',
-            'volume': r'volume=\{(.*)\}',
-            'number': r'number=\{(.*)\}',
-            'pages': r'pages=\{(.*)\}',
-            'publisher': r'publisher=\{(.*)\}'
-        }
-
-
-        for key, reg in bib_regs.items():
-            self.article[key] = re.search(reg, bib_text, re.IGNORECASE)
-        
-        return info
 
     @staticmethod
     def _tag_has_class(tag, klass):
@@ -1170,7 +1170,7 @@ class ScholarQuerier(object):
 
         # change to str if it's bytes
         if type(data) == bytes:
-            data = data.decode('utf-8') 
+            data = data.decode('utf-8').replace('\\', '') # there's some useless '\' characters
 
         article.set_citation_data(data)
         return True
@@ -1233,11 +1233,16 @@ class ScholarQuerier(object):
             ScholarUtils.log('debug', 'data:\n' + html.decode('utf-8')) # For Python 3
             ScholarUtils.log('debug', '<<<<' + '-'*68)
 
+            # check for robot check!
+            if "Please show you&#39;re not a robot" in html.decode('utf-8'):
+                ScholarUtils.log('info', err_msg + ': google recognized you as a robot!')
+                return None
             self.is_first_request = False # apply delay for next request!
 
             return html
         except Exception as err:
             ScholarUtils.log('info', err_msg + ': %s' % err)
+            print(err)
             return None
 
     def set_delay(self, min_delay, max_delay):
@@ -1253,6 +1258,9 @@ class ScholarQuerier(object):
     def __iadd__(self, other):
         self.articles += other.articles
         return self
+
+    def __getitem__(self, num):
+        return self.articles[num]
 
 def txt(querier, with_globals):
     if with_globals:
@@ -1365,6 +1373,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Like --csv, but print header with column names')
     group.add_option('--citation', metavar='FORMAT', default=None,
                      help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
+    group.add_option('--full-info', action='store_true', default=False,
+                     help='get full information of an article. it\'ll retrieve more information like journal, publisher, pages, ... from bibTex. (it\'ll increase run-time for getting bibTex information)')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Miscellaneous')
@@ -1407,7 +1417,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     querier = ScholarQuerier()
     settings = ScholarSettings()
 
-    if options.citation == 'bt':
+    if options.citation == 'bt' or options.full_info:
         settings.set_citation_format(ScholarSettings.CITFORM_BIBTEX)
     elif options.citation == 'en':
         settings.set_citation_format(ScholarSettings.CITFORM_ENDNOTE)
@@ -1504,6 +1514,11 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
         remaining_to_get = results_num_to_get - len(querier)
         # print(f'remaining: {remaining_to_get}')
+
+    # include bibTex information to results if user wants it
+    if options.full_info:
+        for article in querier:
+            article.parse_bib()
 
     if options.csv:
         csv(querier)
