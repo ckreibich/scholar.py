@@ -751,6 +751,7 @@ class SearchScholarQuery(ScholarQuery):
         + '&as_oq=%(words_some)s' \
         + '&as_eq=%(words_none)s' \
         + '&as_occt=%(scope)s' \
+        + '&start=%(start)s' \
         + '&as_sauthors=%(authors)s' \
         + '&as_publication=%(pub)s' \
         + '&as_ylo=%(ylo)s' \
@@ -766,6 +767,7 @@ class SearchScholarQuery(ScholarQuery):
         self.words = None # The default search behavior
         self.words_some = None # At least one of those words
         self.words_none = None # None of these words
+        self.start = None
         self.phrase = None
         self.scope_title = False # If True, search in title only
         self.author = None
@@ -804,6 +806,13 @@ class SearchScholarQuery(ScholarQuery):
     def set_pub(self, pub):
         """Sets the publication in which the result must be found."""
         self.pub = pub
+
+    def set_start(self, start):
+        """
+        Sets result offset for paging. Offset is in number of results, so
+        should be a multiple of num/count.
+        """
+        self.start = ScholarUtils.ensure_int(start)
 
     def set_timeframe(self, start=None, end=None):
         """
@@ -846,6 +855,7 @@ class SearchScholarQuery(ScholarQuery):
                    'words_some': words_some or '',
                    'words_none': words_none or '',
                    'phrase': self.phrase or '',
+                   'start': self.start or '',
                    'scope': 'title' if self.scope_title else 'any',
                    'authors': self.author or '',
                    'pub': self.pub or '',
