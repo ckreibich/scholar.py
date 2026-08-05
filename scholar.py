@@ -512,7 +512,7 @@ class ScholarArticleParser(object):
 
     def _path2url(self, path):
         """Helper, returns full URL in case path isn't one."""
-        if path.startswith('http://'):
+        if path.startswith(('http://', 'https://')):
             return path
         if not path.startswith('/'):
             path = '/' + path
@@ -567,9 +567,14 @@ class ScholarArticleParser120726(ScholarArticleParser):
         for tag in div:
             if not hasattr(tag, 'name'):
                 continue
+
             if str(tag).lower().find('.pdf'):
                 if tag.find('div', {'class': 'gs_ttss'}):
                     self._parse_links(tag.find('div', {'class': 'gs_ttss'}))
+
+            sidetag = tag.find('div', {'class': 'gs_ttss'})
+            if sidetag and sidetag.a and str(sidetag).lower().find('[pdf]') >= 0:
+                self.article['url_pdf'] = self._path2url(sidetag.a['href'])
 
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_ri'):
                 # There are (at least) two formats here. In the first
