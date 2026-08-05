@@ -7,6 +7,8 @@ page. It is not a recursive crawler.
 # ChangeLog
 # ---------
 #
+# 2.12  Added a JSON export option (author: <nojhan@nojhan.net>).
+#
 # 2.11  The Scholar site seems to have become more picky about the
 #       number of results requested. The default of 20 in scholar.py
 #       could cause HTTP 503 responses. scholar.py now doesn't request
@@ -166,6 +168,7 @@ import os
 import re
 import sys
 import warnings
+import json
 
 try:
     # Try importing for Python 3
@@ -346,6 +349,9 @@ class ScholarArticle(object):
             res.append(sep.join(keys))
         res.append(sep.join([unicode(self.attrs[key][0]) for key in keys]))
         return '\n'.join(res)
+
+    def as_json(self):
+        return json.dumps({key:self.attrs[key][0] for key in self.attrs})
 
     def as_citation(self):
         """
@@ -1139,6 +1145,14 @@ def csv(querier, header=False, sep='|'):
         print(encode(result))
         header = False
 
+def jsonq(querier):
+    articles = querier.articles
+    res=[]
+    for art in articles:
+        result = art.as_json()
+        res.append(encode(result))
+    print("[\n",",\n".join(res),"\n]")
+
 def citation_export(querier):
     articles = querier.articles
     for art in articles:
@@ -1203,6 +1217,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Print article data in CSV form (separator is "|")')
     group.add_option('--csv-header', action='store_true',
                      help='Like --csv, but print header with column names')
+    group.add_option('--json', action='store_true',
+                     help='Print article data in JSON form')
     group.add_option('--citation', metavar='FORMAT', default=None,
                      help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
     parser.add_option_group(group)
@@ -1294,6 +1310,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     if options.csv:
         csv(querier)
+    elif options.json:
+        jsonq(querier)
     elif options.csv_header:
         csv(querier, header=True)
     elif options.citation is not None:
