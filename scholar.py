@@ -347,6 +347,15 @@ class ScholarArticle(object):
         res.append(sep.join([unicode(self.attrs[key][0]) for key in keys]))
         return '\n'.join(res)
 
+    def as_json(self, ensure_ascii=True, indent=None, separators=None, sort_keys=False):
+        """
+        Returns the results in JSON format. All the optional arguments are passed to json.dumps().
+        """
+        import json
+
+        d = dict([(key, self.attrs[key][0]) for key in self.attrs.keys()])
+        return json.dumps(d, ensure_ascii=ensure_ascii, indent=indent, separators=separators, sort_keys=sort_keys)
+
     def as_citation(self):
         """
         Reports the article in a standard citation format. This works only
@@ -1139,6 +1148,17 @@ def csv(querier, header=False, sep='|'):
         print(encode(result))
         header = False
 
+def json(querier, jsonp=None):
+    articles = querier.articles
+    result = '['
+    for art in articles:
+        result += art.as_json(indent=True) + ', '
+    result = result[:-2] + ']'
+    if jsonp:
+       print(encode(jsonp+'('+result+');'))
+    else:
+       print(encode(result))
+
 def citation_export(querier):
     articles = querier.articles
     for art in articles:
@@ -1203,6 +1223,10 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Print article data in CSV form (separator is "|")')
     group.add_option('--csv-header', action='store_true',
                      help='Like --csv, but print header with column names')
+    group.add_option('--json', action='store_true',
+                     help='Print article data in JSON form')
+    group.add_option('--jsonp', metavar='FUNC', default=None,
+                     help='Print article data in JSONP form, i.e. FUNC(JSON);')
     group.add_option('--citation', metavar='FORMAT', default=None,
                      help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
     parser.add_option_group(group)
@@ -1296,6 +1320,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         csv(querier)
     elif options.csv_header:
         csv(querier, header=True)
+    elif options.json:
+        json(querier, jsonp=options.jsonp)
     elif options.citation is not None:
         citation_export(querier)
     else:
