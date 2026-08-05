@@ -758,7 +758,8 @@ class SearchScholarQuery(ScholarQuery):
         + '&as_vis=%(citations)s' \
         + '&btnG=&hl=en' \
         + '%(num)s' \
-        + '&as_sdt=%(patents)s%%2C5'
+        + '&as_sdt=%(patents)s%%2C5' \
+        + '&start=%(start)s'
 
     def __init__(self):
         ScholarQuery.__init__(self)
@@ -773,6 +774,7 @@ class SearchScholarQuery(ScholarQuery):
         self.timeframe = [None, None]
         self.include_patents = True
         self.include_citations = True
+        self.start = 0
 
     def set_words(self, words):
         """Sets words that *all* must be found in the result."""
@@ -822,6 +824,9 @@ class SearchScholarQuery(ScholarQuery):
     def set_include_patents(self, yesorno):
         self.include_patents = yesorno
 
+    def set_start_index(self, index):
+        self.start = index
+
     def get_url(self):
         if self.words is None and self.words_some is None \
            and self.words_none is None and self.phrase is None \
@@ -852,7 +857,8 @@ class SearchScholarQuery(ScholarQuery):
                    'ylo': self.timeframe[0] or '',
                    'yhi': self.timeframe[1] or '',
                    'patents': '0' if self.include_patents else '1',
-                   'citations': '0' if self.include_citations else '1'}
+                   'citations': '0' if self.include_citations else '1',
+                   'start': self.start or '0'}
 
         for key, val in urlargs.items():
             urlargs[key] = quote(encode(val))
@@ -1191,6 +1197,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not search, just use articles in given cluster ID')
     group.add_option('-c', '--count', type='int', default=None,
                      help='Maximum number of results')
+    group.add_option('-r', '--start', type='int', default=None,
+                     help='Begin with the result at a particular index [zero-indexed]')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Output format',
@@ -1285,6 +1293,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
             query.set_include_patents(False)
         if options.no_citations:
             query.set_include_citations(False)
+        if options.start:
+            query.set_start_index(options.start)
 
     if options.count is not None:
         options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
