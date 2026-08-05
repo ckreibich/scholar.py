@@ -1,11 +1,14 @@
 #! /usr/bin/env python
 """
 This module provides classes for querying Google Scholar and parsing
-returned results. It currently *only* processes the first results
-page. It is not a recursive crawler.
+returned results. It is not a recursive crawler.
 """
 # ChangeLog
 # ---------
+#
+# 2.12  Added a paging system to get results on more pages that
+#       the initial one. The number of results requested is forced back
+#       to the default of 10. (You still cannot request more than 20 results.)
 #
 # 2.11  The Scholar site seems to have become more picky about the
 #       number of results requested. The default of 20 in scholar.py
@@ -238,7 +241,7 @@ class SoupKitchen(object):
 class ScholarConf(object):
     """Helper class for global settings."""
 
-    VERSION = '2.10'
+    VERSION = '2.12'
     LOG_LEVEL = 1
     MAX_PAGE_RESULTS = 10 # Current default for per-page results
     SCHOLAR_SITE = 'http://scholar.google.com'
@@ -632,7 +635,8 @@ class ScholarQuery(object):
         # The number of results requested from Scholar -- not the
         # total number of results it reports (the latter gets stored
         # in attrs, see below).
-        self.num_results = None
+        self.num_results = 10 # force results to show onl10 at a time
+        self.start = 0
 
         # Queries may have global result attributes, similar to
         # per-article attributes in ScholarArticle. The exact set of
@@ -644,6 +648,11 @@ class ScholarQuery(object):
         self.num_results = ScholarUtils.ensure_int(
             num_page_results,
             'maximum number of results on page must be numeric')
+
+    def set_start(self, page_num):
+        self.start = ScholarUtils.ensure_int(
+            page_num * self.num_results,
+            'Page number')
 
     def get_url(self):
         """
@@ -708,11 +717,13 @@ class ClusterScholarQuery(ScholarQuery):
     """
     SCHOLAR_CLUSTER_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
         + 'cluster=%(cluster)s' \
-        + '%(num)s'
+        + '%(num)s' \
+        + '%(start)s'
 
     def __init__(self, cluster=None):
         ScholarQuery.__init__(self)
         self._add_attribute_type('num_results', 'Results', 0)
+        self._add_attribute_type('page', 'Page', 0)
         self.cluster = None
         self.set_cluster(cluster)
 
@@ -737,6 +748,10 @@ class ClusterScholarQuery(ScholarQuery):
         urlargs['num'] = ('&num=%d' % self.num_results
                           if self.num_results is not None else '')
 
+        # paging
+        urlargs['start'] = ('&start=%d' % self.start
+                          if self.start is not None else 0)
+
         return self.SCHOLAR_CLUSTER_URL % urlargs
 
 
@@ -758,11 +773,13 @@ class SearchScholarQuery(ScholarQuery):
         + '&as_vis=%(citations)s' \
         + '&btnG=&hl=en' \
         + '%(num)s' \
+        + '%(start)s' \
         + '&as_sdt=%(patents)s%%2C5'
 
     def __init__(self):
         ScholarQuery.__init__(self)
         self._add_attribute_type('num_results', 'Results', 0)
+        self._add_attribute_type('page', 'Page', 0)
         self.words = None # The default search behavior
         self.words_some = None # At least one of those words
         self.words_none = None # None of these words
@@ -862,6 +879,10 @@ class SearchScholarQuery(ScholarQuery):
         urlargs['num'] = ('&num=%d' % self.num_results
                           if self.num_results is not None else '')
 
+        # paging
+        urlargs['start'] = ('&start=%d' % self.start
+                          if self.start is not None else 0)
+
         return self.SCHOLAR_QUERY_URL % urlargs
 
 
@@ -920,6 +941,7 @@ class ScholarQuerier(object):
         + '&as_sdt=1,5' \
         + '&as_sdtp=' \
         + '&num=%(num)s' \
+        + '&start=%(start)s' \
         + '&scis=%(scis)s' \
         + '%(scisf)s' \
         + '&hl=en&lang=all&instq=&inst=569367360547434339&save='
@@ -1191,6 +1213,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not search, just use articles in given cluster ID')
     group.add_option('-c', '--count', type='int', default=None,
                      help='Maximum number of results')
+    group.add_option('-S', '--start', type='int', default=None,
+                     help='Navigate to page')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Output format',
@@ -1289,6 +1313,9 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     if options.count is not None:
         options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
         query.set_num_page_results(options.count)
+
+    if options.start is not None:
+        query.set_start(options.start)
 
     querier.send_query(query)
 
