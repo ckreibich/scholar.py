@@ -1,0 +1,15 @@
+(1)To get the whole articles which cited a given article:
+1、 get the cited number on google scholar, eg  "https://scholar.google.com/scholar?oi=bibs&hl=en&cites=6675397154864859782&as_sdt=5
+https://docs.google.com/document/d/1foKQvjIFm8T62-flZ7IWC23g4t52Ad_o4kaLPirUtpI/"， and the cited number is "6675397154864859782"
+2、 input the following code in your terminal python scholar.py -c 100 -T 6675397154864859782 --citation "bt" 
+    100 represents the number of article you want to get from google scholar
+    citation "bt" represents get the bibtex of every article
+Then all the "Bibtex" information will be download into a jsaon file
+
+(2)To figure out what type of citations it is(journal,conference proceeding or something else) and calculate statistics for each journal title
+Run the program journal_name.py 
+
+(3)To search the keywords of every journal, run Pubmed_searchkeywords.py. It will get the keywords on Pubmed.
+
+
+
