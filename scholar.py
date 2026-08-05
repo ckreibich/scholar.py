@@ -756,6 +756,7 @@ class SearchScholarQuery(ScholarQuery):
         + '&as_ylo=%(ylo)s' \
         + '&as_yhi=%(yhi)s' \
         + '&as_vis=%(citations)s' \
+        + '&start=%(start)s' \
         + '&btnG=&hl=en' \
         + '%(num)s' \
         + '&as_sdt=%(patents)s%%2C5'
@@ -770,6 +771,7 @@ class SearchScholarQuery(ScholarQuery):
         self.scope_title = False # If True, search in title only
         self.author = None
         self.pub = None
+        self.start = None
         self.timeframe = [None, None]
         self.include_patents = True
         self.include_citations = True
@@ -804,6 +806,10 @@ class SearchScholarQuery(ScholarQuery):
     def set_pub(self, pub):
         """Sets the publication in which the result must be found."""
         self.pub = pub
+
+    def set_start(self, start):
+        """Sets the offset of results, can be used to circumvent pagination."""
+        self.start = start
 
     def set_timeframe(self, start=None, end=None):
         """
@@ -849,6 +855,7 @@ class SearchScholarQuery(ScholarQuery):
                    'scope': 'title' if self.scope_title else 'any',
                    'authors': self.author or '',
                    'pub': self.pub or '',
+                   'start': self.start or '',
                    'ylo': self.timeframe[0] or '',
                    'yhi': self.timeframe[1] or '',
                    'patents': '0' if self.include_patents else '1',
@@ -861,7 +868,6 @@ class SearchScholarQuery(ScholarQuery):
         # server will not recognize them:
         urlargs['num'] = ('&num=%d' % self.num_results
                           if self.num_results is not None else '')
-
         return self.SCHOLAR_QUERY_URL % urlargs
 
 
@@ -1179,6 +1185,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Search title only')
     group.add_option('-P', '--pub', metavar='PUBLICATIONS', default=None,
                      help='Results must have appeared in this publication')
+    group.add_option('-S', '--start', metavar='START', default=None,
+                     help='Select results starting from here, can be used to circumvent pagination')
     group.add_option('--after', metavar='YEAR', default=None,
                      help='Results must have appeared in or after given year')
     group.add_option('--before', metavar='YEAR', default=None,
@@ -1279,6 +1287,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
             query.set_scope(True)
         if options.pub:
             query.set_pub(options.pub)
+        if options.start:
+            query.set_start(options.start)
         if options.after or options.before:
             query.set_timeframe(options.after, options.before)
         if options.no_patents:
