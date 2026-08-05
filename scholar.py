@@ -287,16 +287,17 @@ class ScholarArticle(object):
         # ordering index:
         self.attrs = {
             'title':         [None, 'Title',          0],
-            'url':           [None, 'URL',            1],
-            'year':          [None, 'Year',           2],
-            'num_citations': [0,    'Citations',      3],
-            'num_versions':  [0,    'Versions',       4],
-            'cluster_id':    [None, 'Cluster ID',     5],
-            'url_pdf':       [None, 'PDF link',       6],
-            'url_citations': [None, 'Citations list', 7],
-            'url_versions':  [None, 'Versions list',  8],
-            'url_citation':  [None, 'Citation link',  9],
-            'excerpt':       [None, 'Excerpt',       10],
+            'author':        [None, 'Author',         1],
+            'url':           [None, 'URL',            2],
+            'year':          [None, 'Year',           3],
+            'num_citations': [0,    'Citations',      4],
+            'num_versions':  [0,    'Versions',       5],
+            'cluster_id':    [None, 'Cluster ID',     6],
+            'url_pdf':       [None, 'PDF link',       7],
+            'url_citations': [None, 'Citations list', 8],
+            'url_versions':  [None, 'Versions list',  9],
+            'url_citation':  [None, 'Citation link', 10],
+            'excerpt':       [None, 'Excerpt',       11],
         }
 
         # The citation data in one of the standard export formats,
@@ -364,9 +365,11 @@ class ScholarArticleParser(object):
     """
     def __init__(self, site=None):
         self.soup = None
+        self.author = None
         self.article = None
         self.site = site or ScholarConf.SCHOLAR_SITE
         self.year_re = re.compile(r'\b(?:20|19)\d{2}\b')
+        self.author_re = re.compile(r'[^-]*')
 
     def handle_article(self, art):
         """
@@ -550,7 +553,9 @@ class ScholarArticleParser120201(ScholarArticleParser):
 
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_a'):
                 year = self.year_re.findall(tag.text)
+                author = self.author_re.findall(tag.text)
                 self.article['year'] = year[0] if len(year) > 0 else None
+                self.article['author'] = author[0] if len(author) > 0 else None
 
             if tag.name == 'div' and self._tag_has_class(tag, 'gs_fl'):
                 self._parse_links(tag)
@@ -608,7 +613,10 @@ class ScholarArticleParser120726(ScholarArticleParser):
 
                 if tag.find('div', {'class': 'gs_a'}):
                     year = self.year_re.findall(tag.find('div', {'class': 'gs_a'}).text)
+                    author = self.author_re.findall(tag.find('div', {'class': 'gs_a'}).text)
                     self.article['year'] = year[0] if len(year) > 0 else None
+                    self.article['author'] = author[0] if len(author) > 0 else None
+
 
                 if tag.find('div', {'class': 'gs_fl'}):
                     self._parse_links(tag.find('div', {'class': 'gs_fl'}))
@@ -746,7 +754,8 @@ class SearchScholarQuery(ScholarQuery):
     configure on the Scholar website, in the advanced search options.
     """
     SCHOLAR_QUERY_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
-        + 'as_q=%(words)s' \
+        + 'start=%(page_num)s' \
+        + '&as_q=%(words)s' \
         + '&as_epq=%(phrase)s' \
         + '&as_oq=%(words_some)s' \
         + '&as_eq=%(words_none)s' \
@@ -763,6 +772,7 @@ class SearchScholarQuery(ScholarQuery):
     def __init__(self):
         ScholarQuery.__init__(self)
         self._add_attribute_type('num_results', 'Results', 0)
+        self.page_num = 0 # Start on first page
         self.words = None # The default search behavior
         self.words_some = None # At least one of those words
         self.words_none = None # None of these words
@@ -773,6 +783,11 @@ class SearchScholarQuery(ScholarQuery):
         self.timeframe = [None, None]
         self.include_patents = True
         self.include_citations = True
+
+    def set_page_num(self, page_num):
+        """Sets page number of search results (by setting starting article to
+        the page_num*10th article)"""
+        self.page_num = int(page_num)*10
 
     def set_words(self, words):
         """Sets words that *all* must be found in the result."""
@@ -842,7 +857,8 @@ class SearchScholarQuery(ScholarQuery):
         if self.words_none:
             words_none = self._parenthesize_phrases(self.words_none)
 
-        urlargs = {'words': self.words or '',
+        urlargs = {'page_num': self.page_num or '',
+                    'words': self.words or '',
                    'words_some': words_some or '',
                    'words_none': words_none or '',
                    'phrase': self.phrase or '',
@@ -1189,6 +1205,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not include citations in results')
     group.add_option('-C', '--cluster-id', metavar='CLUSTER_ID', default=None,
                      help='Do not search, just use articles in given cluster ID')
+    group.add_option('-N', '--page-num', metavar='PAGE_NUM', default=None,
+                      help='Page number')
     group.add_option('-c', '--count', type='int', default=None,
                      help='Maximum number of results')
     parser.add_option_group(group)
@@ -1243,7 +1261,6 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
            or options.after or options.before:
             print('Cluster ID queries do not allow additional search arguments.')
             return 1
-
     querier = ScholarQuerier()
     settings = ScholarSettings()
 
@@ -1285,6 +1302,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
             query.set_include_patents(False)
         if options.no_citations:
             query.set_include_citations(False)
+        if options.page_num:
+            query.set_page_num(options.page_num)
 
     if options.count is not None:
         options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
