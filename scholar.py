@@ -163,8 +163,11 @@ page. It is not a recursive crawler.
 
 import optparse
 import os
+from random import uniform
 import re
 import sys
+from time import sleep
+from typing import OrderedDict
 import warnings
 
 try:
@@ -297,6 +300,12 @@ class ScholarArticle(object):
             'url_versions':  [None, 'Versions list',  8],
             'url_citation':  [None, 'Citation link',  9],
             'excerpt':       [None, 'Excerpt',       10],
+            'type':          [None, 'Paper type',    11],
+            'journal':       [None, 'Journal',       12],
+            'publisher':     [None, 'Publisher',     13],
+            'pages':         [None, 'Pages',         14],
+            'volume':        [None, 'Volume',        15],
+            'issue':         [None, 'Issue',         16],
         }
 
         # The citation data in one of the standard export formats,
@@ -354,6 +363,42 @@ class ScholarArticle(object):
         citation export format. (See ScholarSettings.)
         """
         return self.citation_data or ''
+
+    def parse_bib(self):
+        """it'll parse a bibTex citation information and extract it's information"""
+
+        # check if citation data exists
+        if self.citation_data is None:
+            return False
+        
+        # bibTex sample:
+        # @article{perold1984large,
+        #     title={Large-scale portfolio optimization},
+        #     author={Perold, Andre F},
+        #     journal={Management science},
+        #     volume={30},
+        #     number={10},
+        #     pages={1143--1160},
+        #     year={1984},
+        #     publisher={INFORMS}
+        # }
+
+        # regexes to get informations
+        bib_regs = {
+            'type': r'@(.*){',
+            'title': r'title=\{(.*)\}',
+            'journal': r'journal=\{(.*)\}',
+            'volume': r'volume=\{(.*)\}',
+            'issue': r'number=\{(.*)\}',
+            'pages': r'pages=\{(.*)\}',
+            'publisher': r'publisher=\{(.*)\}'
+        }
+
+        for key, reg in bib_regs.items():
+            val = re.findall(reg, self.citation_data, re.IGNORECASE)
+            self[key] = val[0] if len(val) > 0 else None
+        
+        return True
 
 
 class ScholarArticleParser(object):
@@ -415,7 +460,8 @@ class ScholarArticleParser(object):
             # raw text is a list because the body contains <b> etc
             if raw_text is not None and len(raw_text) > 0:
                 try:
-                    num_results = raw_text[0].split()[1]
+                    # first string after 'about ' is maximum results is founded.
+                    num_results = raw_text[0].lower().split('about ')[1].split()[0]
                     # num_results may now contain commas to separate
                     # thousands, strip:
                     num_results = num_results.replace(',', '')
@@ -482,8 +528,7 @@ class ScholarArticleParser(object):
                     self._strip_url_arg('num', self._path2url(tag.get('href')))
 
             if tag.getText().startswith('Import'):
-                self.article['url_citation'] = self._path2url(tag.get('href'))
-
+                self.article['url_citation'] = tag.get('href')
 
     @staticmethod
     def _tag_has_class(tag, klass):
@@ -745,24 +790,32 @@ class SearchScholarQuery(ScholarQuery):
     This version represents the search query parameters the user can
     configure on the Scholar website, in the advanced search options.
     """
-    SCHOLAR_QUERY_URL = ScholarConf.SCHOLAR_SITE + '/scholar?' \
-        + 'as_q=%(words)s' \
-        + '&as_epq=%(phrase)s' \
-        + '&as_oq=%(words_some)s' \
-        + '&as_eq=%(words_none)s' \
-        + '&as_occt=%(scope)s' \
-        + '&as_sauthors=%(authors)s' \
-        + '&as_publication=%(pub)s' \
-        + '&as_ylo=%(ylo)s' \
-        + '&as_yhi=%(yhi)s' \
-        + '&as_vis=%(citations)s' \
-        + '&btnG=&hl=en' \
-        + '%(num)s' \
-        + '&as_sdt=%(patents)s%%2C5'
+    BASE_URL = ScholarConf.SCHOLAR_SITE + '/scholar?'
+
+    URL_ARGS = OrderedDict({
+        'offset':      'start',
+        'query':       'q',
+        'words':       'as_q',
+        'phrase':      'as_epq',
+        'word_some':   'as_oq',
+        'words_none':  'as_eq',
+        'scope':       'as_occt',
+        'authors':     'as_sauthors',
+        'pub':         'as_publication',
+        'ylo':         'as_ylo',
+        'yhi':         'as_yhi',
+        'citations':   'as_vis',
+        'btnG':        'btnG',
+        'lang':        'hl',
+        'num_results': 'num',
+        'patents':     'as_sdt'
+    })
 
     def __init__(self):
         ScholarQuery.__init__(self)
         self._add_attribute_type('num_results', 'Results', 0)
+        self.offset = None
+        self.query = None
         self.words = None # The default search behavior
         self.words_some = None # At least one of those words
         self.words_none = None # None of these words
@@ -771,8 +824,52 @@ class SearchScholarQuery(ScholarQuery):
         self.author = None
         self.pub = None
         self.timeframe = [None, None]
+        self.btnG = ''
+        self.lang = 'en'
         self.include_patents = True
         self.include_citations = True
+
+    @property
+    def url_query(self):
+        """this will create query to add to BASE_URL for requesting"""
+
+        args = {
+            'offset':      self.offset,
+            'query':       self.query,
+            'words':       self.words,
+            'phrase':      self.phrase,
+            'word_some':   self._parenthesize_phrases(self.words_some) if self.words_some else None,
+            'words_none':  self._parenthesize_phrases(self.words_none) if self.words_none else None,
+            'scope':       'title' if self.scope_title else 'any',
+            'authors':     self.author,
+            'pub':         self.pub,
+            'ylo':         self.timeframe[0],
+            'yhi':         self.timeframe[1],
+            'citations':   '0' if self.include_citations else '1',
+            'btnG':        self.btnG,
+            'lang':        self.lang,
+            'num_results': self.num_results,
+            'patents':     '%s%%2C5' % '0' if self.include_patents else '1'
+        }
+
+        query = ''
+
+        for key, val in self.URL_ARGS.items():
+            if args[key] != None:
+                query += '%s=%s&' % (val, quote(encode(args[key])))
+        
+        # deleting last '&'
+        query = query[: -1]
+        
+        return query
+
+    def set_offset(self, offset):
+        """"sets offset number. it'll skip first (offset) articles in search."""
+        self.offset = offset
+
+    def set_query(self, query):
+        """"it's what you fill in search box."""
+        self.query = query
 
     def set_words(self, words):
         """Sets words that *all* must be found in the result."""
@@ -826,43 +923,11 @@ class SearchScholarQuery(ScholarQuery):
         if self.words is None and self.words_some is None \
            and self.words_none is None and self.phrase is None \
            and self.author is None and self.pub is None \
-           and self.timeframe[0] is None and self.timeframe[1] is None:
+           and self.timeframe[0] is None and self.timeframe[1] is None \
+           and self.query is None:
             raise QueryArgumentError('search query needs more parameters')
-
-        # If we have some-words or none-words lists, we need to
-        # process them so GS understands them. For simple
-        # space-separeted word lists, there's nothing to do. For lists
-        # of phrases we have to ensure quotations around the phrases,
-        # separating them by whitespace.
-        words_some = None
-        words_none = None
-
-        if self.words_some:
-            words_some = self._parenthesize_phrases(self.words_some)
-        if self.words_none:
-            words_none = self._parenthesize_phrases(self.words_none)
-
-        urlargs = {'words': self.words or '',
-                   'words_some': words_some or '',
-                   'words_none': words_none or '',
-                   'phrase': self.phrase or '',
-                   'scope': 'title' if self.scope_title else 'any',
-                   'authors': self.author or '',
-                   'pub': self.pub or '',
-                   'ylo': self.timeframe[0] or '',
-                   'yhi': self.timeframe[1] or '',
-                   'patents': '0' if self.include_patents else '1',
-                   'citations': '0' if self.include_citations else '1'}
-
-        for key, val in urlargs.items():
-            urlargs[key] = quote(encode(val))
-
-        # The following URL arguments must not be quoted, or the
-        # server will not recognize them:
-        urlargs['num'] = ('&num=%d' % self.num_results
-                          if self.num_results is not None else '')
-
-        return self.SCHOLAR_QUERY_URL % urlargs
+            
+        return self.BASE_URL + self.url_query
 
 
 class ScholarSettings(object):
@@ -913,16 +978,25 @@ class ScholarQuerier(object):
     GET_SETTINGS_URL = ScholarConf.SCHOLAR_SITE + '/scholar_settings?' \
         + 'sciifh=1&hl=en&as_sdt=0,5'
 
-    SET_SETTINGS_URL = ScholarConf.SCHOLAR_SITE + '/scholar_setprefs?' \
-        + 'q=' \
-        + '&scisig=%(scisig)s' \
-        + '&inststart=0' \
-        + '&as_sdt=1,5' \
-        + '&as_sdtp=' \
-        + '&num=%(num)s' \
-        + '&scis=%(scis)s' \
-        + '%(scisf)s' \
-        + '&hl=en&lang=all&instq=&inst=569367360547434339&save='
+    # example set setting url :
+    # https://scholar.google.com/scholar_setprefs?inststart=0&scisig=AAGBfm0AAAAAYxisq4fTruxOSf9qjln8EPloukoQ1EtW&xsrf=&num=10&scis=yes&scisf=4&hl=de&lang=all&instq=&boi_access=1&has_boo_access=1&has_casa_opt_in=1&save=
+    BASE_SETTINGS_URL = ScholarConf.SCHOLAR_SITE + '/scholar_setprefs?'
+
+    SETTING_ARGS = OrderedDict({
+        'inststart':       'inststart',
+        'scisig':          'scisig',
+        'xsrf':            'xsrf',
+        'num_results':     'num',
+        'scis':            'scis',
+        'scisf':           'scisf',
+        'lang':            'hl',
+        'art_lang':        'lang',
+        'instq':           'instq',
+        'boi_access':      'boi_access',
+        'has_boo_access':  'has_boo_access',
+        'has_casa_opt_in': 'has_casa_opt_in',
+        'save':            'save'
+    })
 
     # Older URLs:
     # ScholarConf.SCHOLAR_SITE + '/scholar?q=%s&hl=en&btnG=Search&as_sdt=2001&as_sdtp=on
@@ -943,6 +1017,23 @@ class ScholarQuerier(object):
         self.articles = []
         self.query = None
         self.cjar = MozillaCookieJar()
+        self.delay_range = None
+        self.is_first_request = True # don't apply delay for first request.
+
+        self.inststart = '0'
+        self.scising = ''
+        self.xsrf = ''
+        self.num = None
+        self.scis = None
+        self.scisf = None
+        self.lang = 'en'
+        self.art_lang = 'all'
+        self.instq = ''
+        self.boi_access = 1
+        self.has_boo_access = 1
+        self.has_casa_opt_in = 1
+        self.boi_access = 1
+        self.save = ''
 
         # If we have a cookie file, load it:
         if ScholarConf.COOKIE_JAR_FILE and \
@@ -957,6 +1048,37 @@ class ScholarQuerier(object):
 
         self.opener = build_opener(HTTPCookieProcessor(self.cjar))
         self.settings = None # Last settings object, if any
+    
+    @property
+    def setting_query(self):
+        """this will create query to add to BASE_SETTING_URL for requesting"""
+
+        args = {
+            'inststart':       self.inststart,
+            'scisig':          self.scising,
+            'xsrf':            self.xsrf,
+            'num_results':     self.num,
+            'scis':            self.scis,
+            'scisf':           self.scisf,
+            'lang':            self.lang,
+            'art_lang':        self.art_lang,
+            'instq':           self.instq,
+            'boi_access':      self.boi_access,
+            'has_boo_access':  self.has_boo_access,
+            'has_casa_opt_in': self.has_casa_opt_in,
+            'save':            self.save
+        }
+
+        query = ''
+
+        for key, val in self.SETTING_ARGS.items():
+            if args[key] != None:
+                query += '%s=%s&' % (val, quote(encode(args[key])))
+        
+        # deleting last '&'
+        query = query[: -1]
+        
+        return query
 
     def apply_settings(self, settings):
         """
@@ -982,7 +1104,8 @@ class ScholarQuerier(object):
         # to Google.
         soup = SoupKitchen.make_soup(html)
 
-        tag = soup.find(name='form', attrs={'id': 'gs_settings_form'})
+        tag = soup.find(name='form', attrs={'id': 'gs_bdy_frm'})
+
         if tag is None:
             ScholarUtils.log('info', 'parsing settings failed: no form')
             return False
@@ -992,30 +1115,31 @@ class ScholarQuerier(object):
             ScholarUtils.log('info', 'parsing settings failed: scisig')
             return False
 
-        urlargs = {'scisig': tag['value'],
-                   'num': settings.per_page_results,
-                   'scis': 'no',
-                   'scisf': ''}
+        self.scising = tag['value']
+        self.num = settings.per_page_results
+        self.scis = 'no'
 
         if settings.citform != 0:
-            urlargs['scis'] = 'yes'
-            urlargs['scisf'] = '&scisf=%d' % settings.citform
+            self.scis = 'yes'
+            self.scisf = '%d' % settings.citform
 
-        html = self._get_http_response(url=self.SET_SETTINGS_URL % urlargs,
+        html = self._get_http_response(url=self.BASE_SETTINGS_URL + self.setting_query,
                                        log_msg='dump of settings result HTML',
-                                       err_msg='applying setttings failed')
+                                       err_msg='applying setttings failed')    
         if html is None:
             return False
 
         ScholarUtils.log('info', 'settings applied')
         return True
 
-    def send_query(self, query):
+    def send_query(self, query, clear=True):
         """
         This method initiates a search query (a ScholarQuery instance)
         with subsequent parsing of the response.
         """
-        self.clear_articles()
+        if clear:
+            self.clear_articles()
+
         self.query = query
 
         html = self._get_http_response(url=query.get_url(),
@@ -1043,6 +1167,10 @@ class ScholarQuerier(object):
                                        err_msg='requesting citation data failed')
         if data is None:
             return False
+
+        # change to str if it's bytes
+        if type(data) == bytes:
+            data = data.decode('utf-8').replace('\\', '') # there's some useless '\' characters
 
         article.set_citation_data(data)
         return True
@@ -1082,6 +1210,10 @@ class ScholarQuerier(object):
         """
         Helper method, sends HTTP request and returns response payload.
         """
+        # delay for not requesting too much and get banned
+        if self.delay_range is not None and not self.is_first_request:
+            sleep(self.delay)
+
         if log_msg is None:
             log_msg = 'HTTP response data follow'
         if err_msg is None:
@@ -1101,11 +1233,34 @@ class ScholarQuerier(object):
             ScholarUtils.log('debug', 'data:\n' + html.decode('utf-8')) # For Python 3
             ScholarUtils.log('debug', '<<<<' + '-'*68)
 
+            # check for robot check!
+            if "Please show you&#39;re not a robot" in html.decode('utf-8'):
+                ScholarUtils.log('error', err_msg + ': google recognized you as a robot!')
+                return None
+            self.is_first_request = False # apply delay for next request!
+
             return html
         except Exception as err:
             ScholarUtils.log('info', err_msg + ': %s' % err)
+            print(err)
             return None
 
+    def set_delay(self, min_delay, max_delay):
+        self.delay_range = (min_delay, max_delay)
+
+    @property
+    def delay(self):
+        return uniform(*self.delay_range)
+
+    def __len__(self):
+        return len(self.articles)
+    
+    def __iadd__(self, other):
+        self.articles += other.articles
+        return self
+
+    def __getitem__(self, num):
+        return self.articles[num]
 
 def txt(querier, with_globals):
     if with_globals:
@@ -1165,6 +1320,10 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     parser = optparse.OptionParser(usage=usage, formatter=fmt)
     group = optparse.OptionGroup(parser, 'Query arguments',
                                  'These options define search query arguments and parameters.')
+    group.add_option('-q', '--query', metavar='QUERY', default=None,
+                     help='Normal search query. if your query includes double quotes (") or single quotes (\') replace it by (\\") and (\\\'). and wrap your query in single quotes (\') example: \'portfolio\\\'s optimization in \\"stock markets\\"\'')
+    group.add_option('-o', '--offset', type='int', metavar='OFFSET', default=None,
+                     help='it\'ll skip first (offset) articles in search.')
     group.add_option('-a', '--author', metavar='AUTHORS', default=None,
                      help='Author name(s)')
     group.add_option('-A', '--all', metavar='WORDS', default=None, dest='allw',
@@ -1189,8 +1348,17 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Do not include citations in results')
     group.add_option('-C', '--cluster-id', metavar='CLUSTER_ID', default=None,
                      help='Do not search, just use articles in given cluster ID')
-    group.add_option('-c', '--count', type='int', default=None,
-                     help='Maximum number of results')
+    group.add_option('-m', '--max-results', type='int', default=None,
+                     help='Maximum number of results to get, returns all results if is bigger than all results')
+    group.add_option('-D', '--delay', type='string', default=(1.0, 2.0),
+                     help='delay range for each requests pass it as : min, max (it\'ll be delay for each request from min to max seconds), to not get banned by google because of a DOS attack! default is 1,2 sec')
+    group.add_option('--no-delay', action='store_true', default=False,
+                     help='set delay to zero')
+    group.add_option('--all-results', action='store_true', default=False,
+                     help='get all results')
+    # group.add_option('-c', '--count', type='int', default=None,
+                    #  help='Maximum number of results per page')
+
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Output format',
@@ -1205,6 +1373,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Like --csv, but print header with column names')
     group.add_option('--citation', metavar='FORMAT', default=None,
                      help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
+    group.add_option('--full-info', action='store_true', default=False,
+                     help='get full information of an article. it\'ll retrieve more information like journal, publisher, pages, ... from bibTex. (it\'ll increase run-time for getting bibTex information)')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Miscellaneous')
@@ -1247,7 +1417,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
     querier = ScholarQuerier()
     settings = ScholarSettings()
 
-    if options.citation == 'bt':
+    if options.citation == 'bt' or options.full_info:
         settings.set_citation_format(ScholarSettings.CITFORM_BIBTEX)
     elif options.citation == 'en':
         settings.set_citation_format(ScholarSettings.CITFORM_ENDNOTE)
@@ -1261,10 +1431,19 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     querier.apply_settings(settings)
 
+    # add delay if user wants it.
+    if not options.no_delay and options.delay != (0, 0):
+        options.delay = tuple(float(n) for n in options.delay.split(',')) if type(options.delay) == str else options.delay
+        querier.set_delay(*options.delay)
+
     if options.cluster_id:
         query = ClusterScholarQuery(cluster=options.cluster_id)
     else:
         query = SearchScholarQuery()
+        if options.offset:
+            query.set_offset(options.offset)
+        if options.query:
+            query.set_query(options.query)
         if options.author:
             query.set_author(options.author)
         if options.allw:
@@ -1286,11 +1465,54 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         if options.no_citations:
             query.set_include_citations(False)
 
-    if options.count is not None:
-        options.count = min(options.count, ScholarConf.MAX_PAGE_RESULTS)
-        query.set_num_page_results(options.count)
+    if options.max_results is not None:
+        # if user wants less than MAX_PAGE_RESULTS articles
+        if options.max_results < ScholarConf.MAX_PAGE_RESULTS:
+            # set perpage results to max_results
+            query.set_num_page_results(options.max_results)
 
     querier.send_query(query)
+
+    # offset is number of first articles to skip
+    offset = options.offset if options.offset else 0
+
+    # all available articles
+    all_results_num = query['num_results'] - offset
+
+    # set results number to get
+    if options.all_results:
+        results_num_to_get = all_results_num
+    elif options.max_results:
+        results_num_to_get = min(options.max_results, all_results_num)
+    else:
+        results_num_to_get = len(querier)
+    
+    remaining_to_get = results_num_to_get - len(querier)
+
+    # if we didn't get enough articles get remaining articles
+    while remaining_to_get > 0:
+
+        # set offset
+        query.offset = offset + len(querier)
+
+        # if remaining articles to get is less than max results per page
+        if remaining_to_get < ScholarConf.MAX_PAGE_RESULTS:
+        # then just get remaining results
+            query.set_num_page_results(remaining_to_get)
+
+        querier.send_query(query, clear=False)
+
+        # it can mean that there's no more articles to get.
+        if results_num_to_get - len(querier) == remaining_to_get:
+            break
+
+        remaining_to_get = results_num_to_get - len(querier)
+        # print(f'remaining: {remaining_to_get}')
+
+    # include bibTex information to results if user wants it
+    if options.full_info:
+        for article in querier:
+            article.parse_bib()
 
     if options.csv:
         csv(querier)
@@ -1300,7 +1522,7 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
         citation_export(querier)
     else:
         txt(querier, with_globals=options.txt_globals)
-
+        
     if options.cookie_file:
         querier.save_cookies()
 
